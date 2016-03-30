@@ -50,9 +50,9 @@ License
     package_data={'glotpod.ident': ['defaults.toml']},
     namespace_packages=['glotpod'],
     packages=["glotpod." + pkg for pkg in find_packages('src/glotpod')],
-    install_requires=['glotpod.core', 'cryptography~=1.3.0',
-                      'SQLAlchemy~=1.0.12', 'aiopg~=0.9.2',
-                      'SQLAlchemy-Utils~=0.32.0'],
+    install_requires=['cryptography~=1.3.0', 'SQLAlchemy~=1.0.12',
+                      'aiopg~=0.9.2', 'SQLAlchemy-Utils~=0.32.0',
+                      'toml~=0.9.1'],
 
     extras_require={
     },
