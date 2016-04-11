@@ -1,7 +1,7 @@
 import asyncio
+import json
 import logging
 
-import msgpack
 import pytest
 from glotpod.ident.handlers import create_user, get_user, patch_user,\
     HandlerError
@@ -330,7 +330,6 @@ async def test_user_notification(
                                  'notifications.user.{}'.format(name))
 
     async def recv(channel, body, envelope, properties):
-        print(body)
         await recv_queue.put(body)
 
     await amqpchannel.basic_consume(recv, queue_name=result['queue'],
@@ -343,4 +342,4 @@ async def test_user_notification(
     item = await asyncio.wait_for(recv_queue.get(), timeout=1)
 
     # Check that the notification matches what is expected
-    assert msgpack.unpackb(item, encoding='utf8') == expected
+    assert json.loads(item.decode('utf-8')) == expected
