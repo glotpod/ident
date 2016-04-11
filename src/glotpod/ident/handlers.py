@@ -1,5 +1,6 @@
+import json
+
 import jsonpatch
-import msgpack
 
 from collections.abc import Mapping
 from functools import reduce
@@ -123,7 +124,7 @@ async def create_user(helpers, **data):
         data['id'] = user_id
 
         # Send a notification about the creation of this user
-        await helpers['notify'](msgpack.packb(data, encoding='utf8'))
+        await helpers['notify'](json.dumps(data).encode('utf-8'))
 
         return {'user_id': user_id}
 
@@ -209,11 +210,14 @@ async def patch_user(helpers, user_id, ops):
 
         else:
             # Send a notification about the patch
+            patched_data['id'] = user_id
+            patch = jsonpatch.JsonPatch.from_diff(user_data, patched_data)
+
             notify = helpers['notify']
-            await notify(msgpack.packb(
-                {'user_id': user_id, 'ops': ops},
-                encoding='utf8'
-            ))
+            json_data = '{{"user_id": {}, "ops": {} }}'.format(
+                user_id, patch
+            )
+            await notify(json_data.encode('utf-8'))
 
             return ops
 
