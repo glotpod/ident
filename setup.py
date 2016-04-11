@@ -51,8 +51,9 @@ License
     namespace_packages=['glotpod'],
     packages=["glotpod." + pkg for pkg in find_packages('src/glotpod')],
     install_requires=['cryptography~=1.3.0', 'SQLAlchemy~=1.0.12',
-                      'aiopg~=0.9.2', 'SQLAlchemy-Utils~=0.32.0',
-                      'toml~=0.9.1'],
+                      'aiopg~=0.9.2', 'toml~=0.9.1', 'aioamqp~=0.6.0',
+                      'msgpack-python~=0.4.7', 'voluptuous~=0.8.10',
+                      'jsonpatch~=1.13'],
 
     extras_require={
     },
