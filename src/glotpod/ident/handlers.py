@@ -26,7 +26,8 @@ user_schema = Schema({
 })
 
 
-async def get_user(helpers, *, user_id=None, github_id=None, facebook_id=None):
+async def get_user(helpers, *, user_id=None, email=None,
+                   github_id=None, facebook_id=None):
     conn = helpers['db_conn']
     decrypt = helpers['db_fernet'].decrypt
 
@@ -46,6 +47,9 @@ async def get_user(helpers, *, user_id=None, github_id=None, facebook_id=None):
             (services.c.sv_id == facebook_id) &
             (services.c.sv_name == 'fb')
         )
+
+    if email is not None:
+        searches.append(users.c.email_address == email)
 
     qry = select(
         [users, services],
