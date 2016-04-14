@@ -84,9 +84,7 @@ class IdentService(dict):
 
         self._log.info("Connecting to database server.")
 
-        self['db_engine'] = engine = await create_engine(
-            minsize=1, maxsize=1, **args)
-        self['db_conn'] = await engine.acquire()
+        self['db_engine'] = engine = await create_engine(**args)
 
     async def setup(self):
         await self.__setup_db_conn()
@@ -103,12 +101,10 @@ class IdentService(dict):
         if 'transport' in self:
             self.transport.close()
 
-        if 'db_conn' in self:
-            self._log.info("Disposing database connection.")
-            await self['db_conn'].close()
-
         if 'db_engine' in self:
+            self._log.info("Disposing database connections.")
             self['db_engine'].close()
+            await self['db_engine'].wait_closed()
 
     async def handle_request(self, channel, body, envelope, properties):
         key = envelope.routing_key[len(ROUTING_KEY_PREFIX):]
@@ -131,25 +127,27 @@ class IdentService(dict):
             helpers = dict(self)
             helpers['log'] = handler_log
             helpers['notify'] = self['notifications-sender'][key]
-            db_transaction = await self['db_conn'].begin()
 
-            try:
-                resp = {'result': await handler(helpers, **args)}
-                await db_transaction.commit()
-            except (KeyError, TypeError, ValueError):
-                self._log.exception("Handler %r did not receive required data",
-                                    handler)
-                resp = {'error': 'bad_request'}
-            except handlers.HandlerError as e:
-                self._log.exception("Handler %r raised a direct error: %r",
-                                    handler, e)
-                resp = dict(e)
-            except:
-                self._log.exception("Handler %r failed", handler)
-                resp = {'error': 'invocation_failed'}
-                await db_transaction.rollback()
-            finally:
-                await db_transaction.close()
+            async with self['db_engine'].acquire() as self['db_conn']:
+                db_transaction = await self['db_conn'].begin()
+
+                try:
+                    resp = {'result': await handler(helpers, **args)}
+                    await db_transaction.commit()
+                except (KeyError, TypeError, ValueError):
+                    self._log.exception("Handler %r did not receive required data",
+                                        handler)
+                    resp = {'error': 'bad_request'}
+                except handlers.HandlerError as e:
+                    self._log.exception("Handler %r raised a direct error: %r",
+                                        handler, e)
+                    resp = dict(e)
+                except:
+                    self._log.exception("Handler %r failed", handler)
+                    resp = {'error': 'invocation_failed'}
+                    await db_transaction.rollback()
+                finally:
+                    await db_transaction.close()
         finally:
             await channel.basic_client_ack(delivery_tag=envelope.delivery_tag)
 

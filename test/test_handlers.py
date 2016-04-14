@@ -14,8 +14,10 @@ def helpers(ident, event_loop):
     h = dict(ident)
     h['log'] = logging.getLogger('glotpod.ident.test.user')
     h['notify'] = h['notifications-sender']['test']
+    h['db_conn'] = event_loop.run_until_complete(h['db_engine'].acquire())
     yield h
 
+    event_loop.run_until_complete(h['db_conn'].close())
     event_loop.run_until_complete(ident.cleanup())
 
 
@@ -39,6 +41,12 @@ def model(model):
 @pytest.mark.parametrize('query,expected', [
     (
         {'user_id': 1},
+        {'id': 1, 'name': "Ned Stark", 'email': "hand@headless.north",
+         'picture_url': "http://mock.io/gallows.jpg",
+         'github': {'id': 1000, 'access_token': ""}}
+    ),
+    (
+        {'email': 'hand@headless.north'},
         {'id': 1, 'name': "Ned Stark", 'email': "hand@headless.north",
          'picture_url': "http://mock.io/gallows.jpg",
          'github': {'id': 1000, 'access_token': ""}}
