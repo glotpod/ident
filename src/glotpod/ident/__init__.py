@@ -216,10 +216,6 @@ def main(argv=None):
             closed_connections.append(True)
             loop.stop()
 
-        if ident['db_conn'].closed:
-            closed_connections.append(True)
-            loop.stop()
-
         loop.call_later(5, health_check)
 
     try:
