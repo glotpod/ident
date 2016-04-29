@@ -8,6 +8,7 @@ import aioamqp
 import msgpack
 import toml
 
+from logging.handlers import MemoryHandler
 from functools import partial
 from os import environ
 
@@ -198,7 +199,24 @@ def load_config():
     return defaults
 
 
+def configure_logging():
+    log = logging.getLogger(__name__)
+    log.setLevel(logging.INFO)
+
+    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+    stream_handler.setLevel(logging.INFO)
+
+    memory_handler = MemoryHandler(10, target=stream_handler)
+
+    log.addHandler(memory_handler)
+
+
 def main(argv=None):
+    configure_logging()
+
     loop = asyncio.get_event_loop()
 
     config = load_config()
