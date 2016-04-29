@@ -18,6 +18,7 @@ from glotpod.ident import handlers
 
 
 ROUTING_KEY_PREFIX = 'rpc.user.'  # amqp binding key
+NOTIFICATION_KEY_PREFIX = "notifications.user."
 MAX_RETRY_TIMEOUT = 5 * 60  # 5 minutes
 
 
@@ -26,7 +27,7 @@ class NotificationSender:
         self.channel = channel
 
     def __getitem__(self, event):
-        return partial(self, "notifications.user.{}".format(event))
+        return partial(self, "".join((NOTIFICATION_KEY_PREFIX, event)))
 
     async def __call__(self, routing_key, payload_bytes):
         await self.channel.basic_publish(
@@ -128,8 +129,8 @@ class IdentService(dict):
             helpers['log'] = handler_log
             helpers['notify'] = self['notifications-sender'][key]
 
-            async with self['db_engine'].acquire() as self['db_conn']:
-                db_transaction = await self['db_conn'].begin()
+            async with self['db_engine'].acquire() as helpers['db_conn']:
+                db_transaction = await helpers['db_conn'].begin()
 
                 try:
                     resp = {'result': await handler(helpers, **args)}
