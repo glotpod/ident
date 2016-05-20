@@ -3,7 +3,7 @@ import json
 import logging
 
 import pytest
-from glotpod.ident.handlers import create_user, get_user, patch_user,\
+from phi.common.ident.handlers import create_user, get_user, patch_user,\
     HandlerError
 
 

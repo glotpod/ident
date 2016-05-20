@@ -15,7 +15,7 @@ from os import environ
 from aiopg.sa import create_engine
 from cryptography.fernet import Fernet
 
-from glotpod.ident import handlers
+from phi.common.ident import handlers
 
 
 ROUTING_KEY_PREFIX = 'rpc.user.'  # amqp binding key
@@ -81,7 +81,7 @@ class IdentService(dict):
 
     async def __setup_db_conn(self):
         # Connect to postgres
-        default_args = {'database': 'glotpod.ident', 'user': 'glotpod.ident'}
+        default_args = {'database': 'ident.phi', 'user': 'ident.phi'}
         args = self.get('database', {}).get('postgres', default_args)
 
         self._log.info("Connecting to database server.")
@@ -187,12 +187,11 @@ class IdentService(dict):
 
 def load_config():
     defaults = {
-        'database': {},
-        'amqp': {}
+        'database': {}
     }
 
-    if 'GLOTPOD_IDENT_SETTINGS' in environ:
-        with open(environ['GLOTPOD_IDENT_SETTINGS']) as fh:
+    if 'PHI_IDENT_SETTINGS' in environ:
+        with open(environ['PHI_IDENT_SETTINGS']) as fh:
             text = fh.read()
             defaults.update(toml.loads(text))
 

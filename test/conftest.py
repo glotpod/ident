@@ -8,9 +8,9 @@ import pytest
 
 from sqlalchemy import create_engine
 
-from glotpod.ident import load_config, IdentService
-from glotpod.ident.model import metadata, users, services
-from glotpod.ident.handlers import HandlerError
+from phi.common.ident import load_config, IdentService
+from phi.common.ident.model import metadata, users, services
+from phi.common.ident.handlers import HandlerError
 
 
 class IdentServiceCaller:
@@ -201,11 +201,11 @@ def config():
     dbcfg.setdefault('password', '')
     dbcfg.setdefault('host', 'localhost'),
     dbcfg.setdefault('port', '5432')
-    dbcfg.setdefault('database', 'glotpod.ident')
+    dbcfg.setdefault('database', 'phi.common.ident')
 
     for var in os.environ:
-        if var.startswith('GLOTPOD_IDENT_TEST_POSTGRES_'):
-            key = var[len('GLOTPOD_IDENT_TEST_POSTGRES_')].lower()
+        if var.startswith('PHI_IDENT_TEST_POSTGRES_'):
+            key = var[len('PHI_IDENT_TEST_POSTGRES_'):].lower()
             dbcfg[key] = os.environ[var]
 
     return cfg

@@ -9,7 +9,7 @@ from psycopg2 import DataError, IntegrityError, errorcodes
 from sqlalchemy.sql import select
 from voluptuous import Any, Schema, Required, Remove, MultipleInvalid
 
-from glotpod.ident.model import users, services
+from phi.common.ident.model import users, services
 
 __all__ = ['create_user', 'get_user', 'patch_user', 'HandlerError']
 

@@ -12,7 +12,7 @@ def read(relpath):
         return f.read()
 
 setup(
-    name='glotpod.ident',
+    name='phi.common.ident',
 
     description='Identity micro-service for GlotPod',
     long_description="""
@@ -23,8 +23,6 @@ License
 
 {LICENSE}
 """.format(README=read("README.rst"), LICENSE=read("LICENSE.rst")),
-
-    url='https://github.com/te-je/glotpod-ident',
 
     author='Te-jé Rodgers',
     author_email='tjd.rodgers@gmail.com',
@@ -44,12 +42,12 @@ License
     ],
 
     setup_requires=['setuptools_scm'],
-    use_scm_version={"write_to": "src/glotpod/ident/__version__.py"},
+    use_scm_version={"write_to": "src/phi/common/ident/__version__.py"},
 
     package_dir={'': 'src'},
-    package_data={'glotpod.ident': ['defaults.toml']},
-    namespace_packages=['glotpod'],
-    packages=["glotpod." + pkg for pkg in find_packages('src/glotpod')],
+    package_data={'phi.common.ident': ['defaults.toml']},
+    namespace_packages=['phi', 'phi.common'],
+    packages=["phi.common." + pkg for pkg in find_packages('src/phi/common')],
     install_requires=['cryptography~=1.3.0', 'SQLAlchemy~=1.0.12',
                       'aiopg~=0.9.2', 'toml~=0.9.1', 'aioamqp~=0.6.0',
                       'msgpack-python~=0.4.7', 'voluptuous~=0.8.10',

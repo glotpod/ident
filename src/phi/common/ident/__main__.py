@@ -1,4 +1,4 @@
-from glotpod.ident import main
+from phi.common.ident import main
 
 
 if __name__ == '__main__':
