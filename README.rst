@@ -21,12 +21,12 @@ Usage
 
 To start an instance of the Identity micro-service::
 
-  $ python -m phi.common.ident
+  $ python -m aiohttp.web -H localhost -P 5000 phi.common.ident:init_app
 
 More than one instance can be run. In that case, the requests pertaining to
 user identity will be partitioned across the instances.
 
-To run successfully, the instance relies on being able to reach a Postgres 
+To run successfully, the instance relies on being able to reach a Postgres
 instance. The Postgres instance may be exclusive to the Identity service, or
 may be shared with other micro-services *as long as* the configured database
 remains exclusive to Identity.
@@ -42,9 +42,9 @@ Key                                  Default            Description
                                                         This needs to be base32 encoded.
 ``database.postgres.host``           ``localhost``      Which host is Postgres listening on?
 ``database.postgres.port``           ``5432``           Which port is Postgres listening on?
-``database.postgres.database``       ``ident.phi``      A (pre-created) database in Postgres which glotpod-ident will
+``database.postgres.database``       ``phi.ident``      A (pre-created) database in Postgres which glotpod-ident will
                                                         use for its tables.
-``database.postgres.user``           ``ident.phi``      A Postgres user which has read/write access to the database
+``database.postgres.user``           ``phi.ident``      A Postgres user which has read/write access to the database
 ``database.postgres.password``       ---                The password which authenticates the postgres user.
 ==================================   ================== ==============================================================
 
@@ -53,7 +53,7 @@ Handling Failures
 
 In a peacchy environment, an ident instance will run indefinitely until you
 stop it. However, in systems such as these, remote machines may go down and
-connections may get lost. In the event of a failure to reach the postgres 
+connections may get lost. In the event of a failure to reach the postgres
 instance, an ident instance may shut itself down and **exit with
 status code 129.**
 

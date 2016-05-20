@@ -49,9 +49,8 @@ License
     namespace_packages=['phi', 'phi.common'],
     packages=["phi.common." + pkg for pkg in find_packages('src/phi/common')],
     install_requires=['cryptography~=1.3.0', 'SQLAlchemy~=1.0.12',
-                      'aiopg~=0.9.2', 'toml~=0.9.1', 'aioamqp~=0.6.0',
-                      'msgpack-python~=0.4.7', 'voluptuous~=0.8.10',
-                      'jsonpatch~=1.13'],
+                      'aiopg~=0.9.2', 'toml~=0.9.1', 'aiohttp~=0.21.6',
+                      'voluptuous~=0.8.10', 'jsonpatch~=1.13'],
 
     extras_require={
     },
