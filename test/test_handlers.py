@@ -3,22 +3,15 @@ import json
 import logging
 
 import pytest
+
+from webtest_aiohttp import TestApp
 from phi.common.ident.handlers import create_user, get_user, patch_user,\
     HandlerError
 
 
-@pytest.yield_fixture
-def helpers(ident, event_loop):
-    event_loop.run_until_complete(ident.setup())
-
-    h = dict(ident)
-    h['log'] = logging.getLogger('glotpod.ident.test.user')
-    h['notify'] = h['notifications-sender']['test']
-    h['db_conn'] = event_loop.run_until_complete(h['db_engine'].acquire())
-    yield h
-
-    event_loop.run_until_complete(h['db_conn'].close())
-    event_loop.run_until_complete(ident.cleanup())
+@pytest.fixture
+def client(app):
+    return TestApp(app)
 
 
 @pytest.fixture
@@ -36,7 +29,7 @@ def model(model):
 
     return model
 
-
+"""
 @pytest.mark.asyncio
 @pytest.mark.parametrize('query,expected', [
     (
@@ -351,3 +344,4 @@ async def test_user_notification(
 
     # Check that the notification matches what is expected
     assert json.loads(item.decode('utf-8')) == expected
+"""
