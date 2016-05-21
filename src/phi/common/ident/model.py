@@ -7,7 +7,6 @@ metadata = sa.MetaData()
 users = sa.Table('users', metadata,
                  sa.Column('id', sa.Integer(), nullable=False),
                  sa.Column('name', sa.String(), nullable=False),
-                 sa.Column('picture_url', sa.String(), nullable=True),
                  sa.Column('email_address', sa.String(), nullable=False),
                  sa.PrimaryKeyConstraint('id'),
                  sa.UniqueConstraint('email_address'))
