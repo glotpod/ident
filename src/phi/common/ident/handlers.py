@@ -5,6 +5,7 @@ import jsonpatch
 from collections.abc import Mapping
 from functools import reduce
 
+from aiohttp import web
 from psycopg2 import DataError, IntegrityError, errorcodes
 from sqlalchemy.sql import select
 from voluptuous import Any, Schema, Required, Remove, MultipleInvalid
@@ -18,15 +19,52 @@ user_schema = Schema({
     Remove('id'): int,
     Required('name'): str,
     Required('email'): str,
-    'picture_url': str,
-    Required(Any('github', 'facebook')): {
-        Required('id'): int,
-        Required('access_token'): str,
+    'services': {
+        Any('github', 'facebook'): {
+            Required('id'): str
+        }
     },
 })
 
 
-async def get_user(helpers, *, user_id=None, email=None,
+async def get_user(request):
+    user_id = request.match_info['user_id']
+
+    try:
+        user_id = int(user_id)
+    except:
+        raise web.HTTPNotFound
+
+    async with request['db_pool'].acquire() as conn:
+        user_data = {}
+        query = select([users, services]).where(users.c.id == user_id)
+        query = query.where(users.c.id == services.c.user_id)
+        print(query, user_id)
+
+        async for row in conn.execute(query):
+            print(row)
+            user_data['id'] = row['id']
+            user_data['name'] = row['name']
+            user_data['email'] = row['email_address']
+            user_data.setdefault('services', {})
+
+            if row['sv_id'] is not None:
+                data = {
+                    'id': row['sv_id'],
+                    'access_token': request['fernet'].decrypt(
+                        row['access_token'].tobytes()
+                    ).decode('utf-8')
+                }
+                key = 'facebook' if row['sv_name'] == 'fb' else 'github'
+                user_data['services'][key] = data
+
+        if not user_data:
+            raise web.HTTPNotFound
+
+        return web.json_response(user_data)
+
+
+async def __OLD_get_user(helpers, *, user_id=None, email=None,
                    github_id=None, facebook_id=None):
     conn = helpers['db_conn']
     decrypt = helpers['db_fernet'].decrypt

@@ -16,8 +16,7 @@ def client(app):
 
 @pytest.fixture
 def model(model):
-    id = model.add_user(name="Ned Stark", email_address="hand@headless.north",
-                        picture_url="http://mock.io/gallows.jpg")
+    id = model.add_user(name="Ned Stark", email_address="hand@headless.north")
     model.add_github_info(sv_id=1000, access_token="", user_id=id)
 
     id = model.add_user(name="Jon Snow", email_address="clueless@wall.north")
@@ -28,6 +27,40 @@ def model(model):
     model.add_facebook_info(sv_id=75, access_token="", user_id=id)
 
     return model
+
+
+@pytest.mark.parametrize('id,expected', [
+    (
+        1,
+        {'id': 1, 'name': "Ned Stark", 'email': "hand@headless.north",
+         'services': {'github': {'id': '1000', 'access_token': ""}}}
+    ),
+    (
+        2,
+        {'id': 2, 'name': "Jon Snow", 'email': "clueless@wall.north",
+         'services': {'facebook': {'id': '1000', 'access_token': ""}}}
+    ),
+    (
+        3,
+        {'id': 3, 'name': "Rob Stark", 'email': "king@deceased.north",
+         'services': {'facebook': {'id': '75', 'access_token': ""},
+                      'github': {'id': '25', 'access_token': ""}}}
+    ),
+    (4, None),
+    (0, None),
+    ("", None),
+    (99232832432423423, None),
+    (-1, None)
+])
+def test_get_user(client, model, id, expected):
+    res = client.get("/{id}".format(id=id), expect_errors=True)
+
+    if expected is None:
+        assert res.status_code == 404
+
+    else:
+        assert res.status_code == 200
+        assert res.json == expected
 
 """
 @pytest.mark.asyncio

@@ -58,10 +58,10 @@ async def db_pool_middleware_factory(app, handler):
         app['log'].info("Creating pooled database connections.")
         app['db_engine'] = await create_engine(**args)
 
-        async def cleanup():
+        async def cleanup(app):
             app['log'].info("Disposing pooled database connections.")
-            engine.close()
-            await engine.wait_closed()
+            app['db_engine'].close()
+            await app['db_engine'].wait_closed()
 
 
         app.on_shutdown.append(cleanup)
@@ -142,6 +142,8 @@ def init_app(_, *, loop=None):
 
     app = web.Application(loop=loop, middlewares=middlewares)
     app['config'] = load_config()
+
+    app.router.add_route('get', '/{user_id}', handlers.get_user)
 
     return app
 

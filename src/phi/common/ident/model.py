@@ -14,7 +14,7 @@ users = sa.Table('users', metadata,
 
 services = sa.Table('services', metadata,
                     sa.Column('user_id', sa.Integer, nullable=False),
-                    sa.Column('sv_id', sa.Integer, nullable=False),
+                    sa.Column('sv_id', sa.String, nullable=False),
                     sa.Column(
                         'sv_name',
                         sa.Enum('fb', 'gh', name='svc_type'),
