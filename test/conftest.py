@@ -2,8 +2,6 @@ import asyncio
 import os
 import uuid
 
-import aioamqp
-import msgpack
 import pytest
 
 from sqlalchemy import create_engine
