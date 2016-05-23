@@ -8,7 +8,7 @@ from functools import reduce
 from aiohttp import web
 from psycopg2 import DataError, IntegrityError, errorcodes
 from sqlalchemy.sql import select
-from voluptuous import Any, Schema, Required, Remove, MultipleInvalid
+from voluptuous import All, Any, Schema, Required, Remove, Length, MultipleInvalid
 
 from phi.common.ident.model import users, services
 
@@ -17,11 +17,12 @@ __all__ = ['create_user', 'get_user', 'patch_user', 'HandlerError']
 
 user_schema = Schema({
     Remove('id'): int,
-    Required('name'): str,
-    Required('email'): str,
+    Required('name'): All(str, str.strip, Length(min=1)),
+    Required('email'): All(str, str.strip, Length(min=1)),
     'services': {
         Any('github', 'facebook'): {
-            Required('id'): str
+            Required('id'): All(str, str.strip, Length(min=1)),
+            'access_token': str
         }
     },
 })
@@ -39,22 +40,18 @@ async def get_user(request):
         user_data = {}
         query = select([users, services]).where(users.c.id == user_id)
         query = query.where(users.c.id == services.c.user_id)
-        print(query, user_id)
 
         async for row in conn.execute(query):
-            print(row)
             user_data['id'] = row['id']
             user_data['name'] = row['name']
             user_data['email'] = row['email_address']
             user_data.setdefault('services', {})
 
             if row['sv_id'] is not None:
-                data = {
-                    'id': row['sv_id'],
-                    'access_token': request['fernet'].decrypt(
-                        row['access_token'].tobytes()
-                    ).decode('utf-8')
-                }
+                data = {'id': row['sv_id'],
+                        'access_token': request['fernet'].decrypt(
+                            row['access_token'].tobytes()
+                        ).decode('utf-8')}
                 key = 'facebook' if row['sv_name'] == 'fb' else 'github'
                 user_data['services'][key] = data
 
@@ -126,58 +123,84 @@ async def __OLD_get_user(helpers, *, user_id=None, email=None,
         return user_data
 
 
-async def create_user(helpers, **data):
+async def create_user(request):
     try:
-        data = user_schema(data)
+        # Make sure the incoming data is in a valid format
+        # if request.content_type == "application/x-www-form-urlencoded":
+        #     data = user_schema(await request.post())
+
+        # else:
+        #     data = user_schema(await request.json())
+
+        # fixme: no standard on nested data structures with urlencoded
+        data = user_schema(await request.json())
+
+        # Get a database connection from the pool
+        async with request['db_pool'].acquire() as conn:
+            # Create a transaction for the insertion queries; this
+            # is an all or nothing deal
+            async with conn.begin() as transaction:
+                # Construct the insert query to create the user object
+                query = users.insert().values(
+                    name=data['name'],
+                    email_address=data['email']
+                )
+                user_id = await conn.scalar(query.returning(users.c.id))
+
+                data.setdefault('services', {})
+
+                if 'facebook' in data['services']:
+                    await conn.execute(
+                        services.insert().values(
+                            user_id=user_id,
+                            sv_name='fb',
+                            access_token=request['fernet'].encrypt(
+                                data['services']['facebook']['access_token'] \
+                                    .encode('utf8')
+                            ),
+                            sv_id=data['services']['facebook']['id']
+                        )
+                    )
+
+                if 'github' in data['services']:
+                    await conn.execute(
+                        services.insert().values(
+                            user_id=user_id,
+                            sv_name='gh',
+                            access_token=request['fernet'].encrypt(
+                                data['services']['github']['access_token'] \
+                                    .encode('utf8')
+                            ),
+                            sv_id=data['services']['github']['id']
+                        )
+                    )
+
     except MultipleInvalid:
-        raise ValueError(data)
-
-    conn = helpers['db_conn']
-
-    try:
-        qry = users.insert().values(name=data['name'],
-                                    email_address=data['email'],
-                                    picture_url=data.get('picture_url'))
-        user_id = await conn.scalar(qry.returning(users.c.id))
-
-        if 'github' in data:
-            await conn.execute(
-                _build_service_insert_query(helpers,
-                                            user_id,
-                                            'gh',
-                                            data['github'])
-            )
-
-        if 'facebook' in data:
-            await conn.execute(
-                _build_service_insert_query(helpers,
-                                            user_id,
-                                            'fb',
-                                            data['facebook'])
-            )
+        raise web.HTTPBadRequest
 
     except IntegrityError as e:
         if e.pgcode == errorcodes.UNIQUE_VIOLATION:
-            raise HandlerError('conflict')
+            print(e)
+            raise web.HTTPConflict
         else:
             raise
 
     else:
+        # Construct the
         data['id'] = user_id
 
-        # Send a notification about the creation of this user
-        await helpers['notify'](json.dumps(data).encode('utf-8'))
+        # # Send a notification about the creation of this user
+        # await helpers['notify'](json.dumps(data).encode('utf-8'))
 
-        return {'user_id': user_id}
+        # Construct a URL to the resource
+        user_url = request.app.router.named_resources()['user'].url(
+            parts={'user_id': user_id}
+        )
 
+        # ... and headers
+        headers = {'Location': user_url}
 
-def _build_service_insert_query(helpers, user_id, sv_name, args):
-    encrypt = helpers['db_fernet'].encrypt
-
-    return services.insert().values(
-        user_id=user_id, sv_id=args['id'], sv_name=sv_name,
-        access_token=encrypt(args['access_token'].encode('utf-8'))
-    )
+        return web.json_response({'id': user_id}, status=201, headers=headers)
 
 
 async def patch_user(helpers, user_id, ops):

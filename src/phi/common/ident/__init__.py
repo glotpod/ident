@@ -143,7 +143,8 @@ def init_app(_, *, loop=None):
     app = web.Application(loop=loop, middlewares=middlewares)
     app['config'] = load_config()
 
-    app.router.add_route('get', '/{user_id}', handlers.get_user)
+    app.router.add_route('get', '/{user_id}', handlers.get_user, name='user')
+    app.router.add_route('post', '/', handlers.create_user)
 
     return app
 
