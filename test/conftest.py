@@ -22,8 +22,7 @@ class ModelFixture:
         # Ensure the database is created
         metadata.create_all(engine)
 
-        # Restart the ID sequence
-        self.conn.execute("ALTER SEQUENCE users_id_seq RESTART;");
+        self.engine = engine
 
     def add_user(self, **args):
         id = self.conn.execute(
@@ -53,12 +52,7 @@ class ModelFixture:
         ).fetchone()
 
     def cleanup(self):
-        for id in self._users:
-            self.conn.execute(services.delete(services.c.user_id == id))
-            self.conn.execute(users.delete(users.c.id == id))
-
-        self._svcs = []
-        self._users = []
+        metadata.drop_all(self.engine)
 
 
 @pytest.fixture
