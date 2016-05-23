@@ -4,14 +4,14 @@ import logging
 
 import pytest
 
-from webtest_aiohttp import TestApp
+from webtest_aiohttp import TestApp as WebtestApp
 from phi.common.ident.handlers import create_user, get_user, patch_user,\
     HandlerError
 
 
 @pytest.fixture
 def client(app):
-    return TestApp(app)
+    return WebtestApp(app)
 
 
 @pytest.fixture
@@ -61,6 +61,105 @@ def test_get_user(client, model, id, expected):
     else:
         assert res.status_code == 200
         assert res.json == expected
+
+
+@pytest.mark.parametrize('request_func', [
+    # WebtestApp.post,
+    WebtestApp.post_json
+])
+@pytest.mark.parametrize('data', [
+    {"name": "Doctor", "email": "twelve@tardis.vortex",
+     "services": {"github": {"id": '4000',
+                             "access_token": "9784rfaweugfdb9ip8aerwrra"}}},
+
+    {"name": "Clara Oswald", "email": "gone@tardis.vortex",
+     "services": {"facebook": {'id': '25',
+                               "access_token": "awf897ryuofuisvr"},
+                  "github": {'id': '75',
+                             "access_token": "urfueisdsfhaiweuahwdiaduhc"}}}
+])
+def test_create_user(model, client, request_func, data):
+    result = request_func(client, "/", data)
+    assert result.status_code == 201
+
+    assert 'id' in result.json
+    assert isinstance(result.json['id'], int)
+
+    id = result.json.pop('id')
+    data['id'] = id
+
+    query = client.get('/{id}'.format(id=id))
+    assert query.json == data
+
+    assert "Location" in result.headers
+    assert result.headers['Location'] == '/{}'.format(id)
+
+
+@pytest.mark.parametrize('data', [
+    {'name': 9, "email": "twelve@tardis.vortex",
+     'services': {'github': {'id': '7000', 'access_token': "9784rfaweugfdb9ip8aerwrra"}}},
+    {'email': "twelve@tardis.vortex",
+     'services': {'github': {'id': '7000', 'access_token': "9784rfaweugfdb9ip8aerwrra"},
+                  'facebook': {'id': '7000', 'access_token': "9784rfaweugfdb9ip8aerwrra"}}},
+
+    {'name': "Doctor", 'email': 0,
+     'services': {'github': {'id': '7000', 'access_token': "9784rfaweugfdb9ip8aerwrra"}}},
+    {'name': "Doctor",
+     'services': {'github': {'id': '7000', 'access_token': "9784rfaweugfdb9ip8aerwrra"}}},
+
+    {'name': "Doctor", 'email': "twelve@tardis.vortex",
+     'services': {'github': {'id': '', 'access_token': "9784rfaweugfdb9ip8aerwrra"}}},
+    {'name': "Doctor", 'email': "twelve@tardis.vortex",
+     'services': {'github': {'access_token': "9784rfaweugfdb9ip8aerwrra"},
+                  'facebook': {'id': '3743', 'access_token': ''}}},
+
+    {'name': "Doctor", 'email': "twelve@tardis.vortex",
+     'services': {'facebook': {'id': '', 'access_token': "9784rfaweugfdb9ip8aerwrra"},
+                  'github': {'id': '3743', 'access_token': ''}}},
+    {'name': "Doctor", 'email': "twelve@tardis.vortex",
+     'services': {'facebook': {'access_token': "9784rfaweugfdb9ip8aerwrra"}}},
+
+    {'name': "Doctor", 'email': "twelve@tardis.vortex",
+     'services': {'github': {'id': '7000', 'access_token': -46777}}},
+
+    {'name': "Doctor", 'email': "twelve@tardis.vortex",
+     'services': {'github': {}}},
+    {'name': "Doctor", 'email': "twelve@tardis.vortex",
+     'services': {'facebook': {}}},
+
+])
+def test_create_user_validation_errors(model, client, data):
+    result = client.post_json('/', data, expect_errors=True)
+    assert result.status_code == 400
+
+
+@pytest.mark.parametrize('data', [
+    # Github id
+    {'name': 'Jack Harness', 'email': 'cptjk@tw.erth',
+     'services': {'github': {'id': '1000', 'access_token': 'fffdjhf'}}},
+
+    # Facebook id
+    {'name': 'Jack Harness', 'email': 'cptjk@tw.erth',
+     'services': {'facebook': {'id': '75', 'access_token': 'fffdjhf'}}},
+
+    # Email address
+    {'name': 'Jack Harness', 'email': 'clueless@wall.north'}
+])
+def test_create_user_conflict_errors(model, client, data):
+    result = client.post_json('/', data, expect_errors=True)
+    assert result.status_code == 409
+
+
+def test_partially_failed_creation_doesnt_leave_behind_data(model, client):
+    data = {'name': 'Peter Jonson', 'email': 'hfg@uf.o.fi',
+            'services': {'facebook': {'id': '75', 'access_token': ''}}}
+    result = client.post_json('/', data, expect_errors=True)
+    assert result.status_code == 409
+
+    # Fix and try again
+    data['services']['facebook']['id'] = '76'
+    result = client.post_json('/', data)
+    assert result.status_code == 201
 
 """
 @pytest.mark.asyncio
@@ -137,94 +236,10 @@ async def test_get_user_request_errors(model, helpers, query):
         await get_user(helpers, **query)
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize('data', [
-    {"name": "Doctor", "email": "twelve@tardis.vortex",
-     "github": {"id": 4000,
-                "access_token": "9784rfaweugfdb9ip8aerwrra"}},
-    {"name": "Clara Oswald", "email": "gone@tardis.vortex",
-     "picture_url": "https://www.google.com/url?sa=i&rct=j&q=&esrc=s&"
-                    "source=images&cd=&cad=rja&uact=8&ved=0ahUKEwjx3c"
-                    "LB3_rLAhXMWx4KHYdKAiUQjRwIBw&url=http%3A%2F%2Fww"
-                    "w.dailymail.co.uk%2Ftvshowbiz%2Farticle-2121133%"
-                    "2FDoctor-Whos-new-companion-Jenna-Louise-Coleman"
-                    "-talks-landing-coveted-role.html&bvm=bv.11844345"
-                    "1,d.dmo&psig=AFQjCNF4brmEq_z7Fa8gEFG0GGX046yB2w&"
-                    "ust=1460057318530047",
-     "facebook": {'id': 25, "access_token": "awf897ryuofuisvr"},
-     "github": {'id': 75, "access_token": "urfueisdsfhaiweuahwdiaduhc"}}
-])
-async def test_create_user(model, helpers, data):
-    result = await create_user(helpers, **data)
-    data['id'] = result['user_id']
-    assert (await get_user(helpers, user_id=result['user_id'])) == data
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize('data', [
-    # Github id
-    {'name': 'Jack Harness', 'email': 'cptjk@tw.erth',
-     'github': {'id': 1000, 'access_token': 'fffdjhf'}},
-
-    # Facebook id
-    {'name': 'Jack Harness', 'email': 'cptjk@tw.erth',
-     'facebook': {'id': 75, 'access_token': 'fffdjhf'}},
-
-    # Email address
-    {'name': 'Jack Harness', 'email': 'clueless@wall.north',
-     'facebook': {'id': 2332923, 'access_token': ''}}
-])
-async def test_create_user_conflict_errors(model, helpers, data):
-
-    with pytest.raises(HandlerError) as excinfo:
-        await create_user(helpers, **data)
-
-    assert excinfo.value['error'] == 'conflict'
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize('data', [
-    {'name': 9, "email": "twelve@tardis.vortex",
-     'github': {'id': 7000, 'access_token': "9784rfaweugfdb9ip8aerwrra"}},
-    {'email': "twelve@tardis.vortex",
-     'github': {'id': 7000, 'access_token': "9784rfaweugfdb9ip8aerwrra"},
-     'facebook': {'id': 7000, 'access_token': "9784rfaweugfdb9ip8aerwrra"}},
-
-    {'name': "Doctor", 'email': 0,
-     'github': {'id': 7000, 'access_token': "9784rfaweugfdb9ip8aerwrra"}},
-    {'name': "Doctor",
-     'github': {'id': 7000, 'access_token': "9784rfaweugfdb9ip8aerwrra"}},
-
-    {'name': "Doctor", 'email': "twelve@tardis.vortex",
-     'github': {'id': '', 'access_token': "9784rfaweugfdb9ip8aerwrra"}},
-    {'name': "Doctor", 'email': "twelve@tardis.vortex",
-     'github': {'access_token': "9784rfaweugfdb9ip8aerwrra"},
-     'facebook': {'id': 3743, 'access_token': ''}},
-
-    {'name': "Doctor", 'email': "twelve@tardis.vortex",
-     'facebook': {'id': '', 'access_token': "9784rfaweugfdb9ip8aerwrra"},
-     'github': {'id': 3743, 'access_token': ''}},
-    {'name': "Doctor", 'email': "twelve@tardis.vortex",
-     'facebook': {'access_token': "9784rfaweugfdb9ip8aerwrra"}},
-
-    {'name': "Doctor", 'email': "twelve@tardis.vortex",
-     'github': {'id': 7000, 'access_token': -46777}},
-    {'name': "Doctor", 'email': "twelve@tardis.vortex",
-     'github': {'id': 7000}},
-
-    {'name': "Doctor", 'email': "twelve@tardis.vortex",
-     'github': {}},
-    {'name': "Doctor", 'email': "twelve@tardis.vortex",
-     'github': 36556},
-    {'name': "Doctor", 'email': "twelve@tardis.vortex",
-     'facebook': {}},
-    {'name': "Doctor", 'email': "twelve@tardis.vortex",
-     'facebook': 32872836},
-
-])
-async def test_create_user_validation_errors(model, helpers, data):
-    with pytest.raises(ValueError):
-        await create_user(helpers, **data)
 
 
 @pytest.mark.asyncio
