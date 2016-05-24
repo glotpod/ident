@@ -21,8 +21,7 @@ user_schema = Schema({
     Required('email'): All(str, str.strip, Length(min=1)),
     'services': {
         Any('github', 'facebook'): {
-            Required('id'): All(str, str.strip, Length(min=1)),
-            'access_token': str
+            Required('id'): All(str, str.strip, Length(min=1))
         }
     },
 })
@@ -48,10 +47,7 @@ async def get_user(request):
             user_data.setdefault('services', {})
 
             if row['sv_id'] is not None:
-                data = {'id': row['sv_id'],
-                        'access_token': request['fernet'].decrypt(
-                            row['access_token'].tobytes()
-                        ).decode('utf-8')}
+                data = {'id': row['sv_id']}
                 key = 'facebook' if row['sv_name'] == 'fb' else 'github'
                 user_data['services'][key] = data
 
@@ -154,10 +150,6 @@ async def create_user(request):
                         services.insert().values(
                             user_id=user_id,
                             sv_name='fb',
-                            access_token=request['fernet'].encrypt(
-                                data['services']['facebook']['access_token'] \
-                                    .encode('utf8')
-                            ),
                             sv_id=data['services']['facebook']['id']
                         )
                     )
@@ -167,10 +159,6 @@ async def create_user(request):
                         services.insert().values(
                             user_id=user_id,
                             sv_name='gh',
-                            access_token=request['fernet'].encrypt(
-                                data['services']['github']['access_token'] \
-                                    .encode('utf8')
-                            ),
                             sv_id=data['services']['github']['id']
                         )
                     )

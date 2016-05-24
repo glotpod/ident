@@ -14,10 +14,8 @@ from phi.common.ident.handlers import HandlerError
 
 class ModelFixture:
     # Helper class to modify a database model
-    def __init__(self, fernet, engine):
-        self.fernet = fernet
+    def __init__(self, engine):
         self.conn = engine.connect()
-        self._users = []
 
         # Ensure the database is created
         metadata.create_all(engine)
@@ -25,11 +23,9 @@ class ModelFixture:
         self.engine = engine
 
     def add_user(self, **args):
-        id = self.conn.execute(
+        return self.conn.execute(
             users.insert().values(**args).returning(users.c.id)
         ).scalar()
-        self._users.append(id)
-        return id
 
     def add_github_info(self, **args):
         args['sv_name'] = 'gh'
@@ -40,10 +36,6 @@ class ModelFixture:
         return self.add_service_info(**args)
 
     def add_service_info(self, **args):
-        if 'access_token' in args:
-            args['access_token'] = self.fernet.encrypt(
-                args['access_token'].encode('utf8'))
-
         return self.conn.execute(
             services.insert().values(**args).returning(
                 services.c.sv_name,
@@ -66,8 +58,8 @@ def dbengine(config):
 
 
 @pytest.yield_fixture
-def model(dbengine, fernet):
-    m = ModelFixture(fernet, dbengine)
+def model(dbengine):
+    m = ModelFixture(dbengine)
     yield m
     m.cleanup()
 

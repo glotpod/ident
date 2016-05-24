@@ -20,7 +20,6 @@ services = sa.Table('services', metadata,
                         sa.Enum('fb', 'gh', name='svc_type'),
                         nullable=False
                     ),
-                    sa.Column('access_token', sa.LargeBinary, nullable=False),
 
                     sa.UniqueConstraint('sv_id', 'sv_name'),
                     sa.PrimaryKeyConstraint('sv_name', 'user_id'),

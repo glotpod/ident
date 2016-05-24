@@ -17,14 +17,14 @@ def client(app):
 @pytest.fixture
 def model(model):
     id = model.add_user(name="Ned Stark", email_address="hand@headless.north")
-    model.add_github_info(sv_id=1000, access_token="", user_id=id)
+    model.add_github_info(sv_id=1000, user_id=id)
 
     id = model.add_user(name="Jon Snow", email_address="clueless@wall.north")
-    model.add_facebook_info(sv_id=1000, access_token="", user_id=id)
+    model.add_facebook_info(sv_id=1000, user_id=id)
 
     id = model.add_user(name="Rob Stark", email_address="king@deceased.north")
-    model.add_github_info(sv_id=25, access_token="", user_id=id)
-    model.add_facebook_info(sv_id=75, access_token="", user_id=id)
+    model.add_github_info(sv_id=25, user_id=id)
+    model.add_facebook_info(sv_id=75, user_id=id)
 
     return model
 
@@ -33,18 +33,18 @@ def model(model):
     (
         1,
         {'id': 1, 'name': "Ned Stark", 'email': "hand@headless.north",
-         'services': {'github': {'id': '1000', 'access_token': ""}}}
+         'services': {'github': {'id': '1000'}}}
     ),
     (
         2,
         {'id': 2, 'name': "Jon Snow", 'email': "clueless@wall.north",
-         'services': {'facebook': {'id': '1000', 'access_token': ""}}}
+         'services': {'facebook': {'id': '1000'}}}
     ),
     (
         3,
         {'id': 3, 'name': "Rob Stark", 'email': "king@deceased.north",
-         'services': {'facebook': {'id': '75', 'access_token': ""},
-                      'github': {'id': '25', 'access_token': ""}}}
+         'services': {'facebook': {'id': '75'},
+                      'github': {'id': '25'}}}
     ),
     (4, None),
     (0, None),
@@ -69,14 +69,11 @@ def test_get_user(client, model, id, expected):
 ])
 @pytest.mark.parametrize('data', [
     {"name": "Doctor", "email": "twelve@tardis.vortex",
-     "services": {"github": {"id": '4000',
-                             "access_token": "9784rfaweugfdb9ip8aerwrra"}}},
+     "services": {"github": {"id": '4000'}}},
 
     {"name": "Clara Oswald", "email": "gone@tardis.vortex",
-     "services": {"facebook": {'id': '25',
-                               "access_token": "awf897ryuofuisvr"},
-                  "github": {'id': '75',
-                             "access_token": "urfueisdsfhaiweuahwdiaduhc"}}}
+     "services": {"facebook": {'id': '25'},
+                  "github": {'id': '75'}}}
 ])
 def test_create_user(model, client, request_func, data):
     result = request_func(client, "/", data)
@@ -97,30 +94,27 @@ def test_create_user(model, client, request_func, data):
 
 @pytest.mark.parametrize('data', [
     {'name': 9, "email": "twelve@tardis.vortex",
-     'services': {'github': {'id': '7000', 'access_token': "9784rfaweugfdb9ip8aerwrra"}}},
+     'services': {'github': {'id': '7000'}}},
     {'email': "twelve@tardis.vortex",
-     'services': {'github': {'id': '7000', 'access_token': "9784rfaweugfdb9ip8aerwrra"},
-                  'facebook': {'id': '7000', 'access_token': "9784rfaweugfdb9ip8aerwrra"}}},
+     'services': {'github': {'id': '7000'},
+                  'facebook': {'id': '7000'}}},
 
     {'name': "Doctor", 'email': 0,
-     'services': {'github': {'id': '7000', 'access_token': "9784rfaweugfdb9ip8aerwrra"}}},
+     'services': {'github': {'id': '7000'}}},
     {'name': "Doctor",
-     'services': {'github': {'id': '7000', 'access_token': "9784rfaweugfdb9ip8aerwrra"}}},
+     'services': {'github': {'id': '7000'}}},
 
     {'name': "Doctor", 'email': "twelve@tardis.vortex",
-     'services': {'github': {'id': '', 'access_token': "9784rfaweugfdb9ip8aerwrra"}}},
+     'services': {'github': {'id': ''}}},
     {'name': "Doctor", 'email': "twelve@tardis.vortex",
-     'services': {'github': {'access_token': "9784rfaweugfdb9ip8aerwrra"},
-                  'facebook': {'id': '3743', 'access_token': ''}}},
+     'services': {'github': {},
+                  'facebook': {'id': '3743'}}},
 
     {'name': "Doctor", 'email': "twelve@tardis.vortex",
-     'services': {'facebook': {'id': '', 'access_token': "9784rfaweugfdb9ip8aerwrra"},
-                  'github': {'id': '3743', 'access_token': ''}}},
+     'services': {'facebook': {'id': ''},
+                  'github': {'id': '3743'}}},
     {'name': "Doctor", 'email': "twelve@tardis.vortex",
-     'services': {'facebook': {'access_token': "9784rfaweugfdb9ip8aerwrra"}}},
-
-    {'name': "Doctor", 'email': "twelve@tardis.vortex",
-     'services': {'github': {'id': '7000', 'access_token': -46777}}},
+     'services': {'facebook': {}}},
 
     {'name': "Doctor", 'email': "twelve@tardis.vortex",
      'services': {'github': {}}},
@@ -136,11 +130,11 @@ def test_create_user_validation_errors(model, client, data):
 @pytest.mark.parametrize('data', [
     # Github id
     {'name': 'Jack Harness', 'email': 'cptjk@tw.erth',
-     'services': {'github': {'id': '1000', 'access_token': 'fffdjhf'}}},
+     'services': {'github': {'id': '1000'}}},
 
     # Facebook id
     {'name': 'Jack Harness', 'email': 'cptjk@tw.erth',
-     'services': {'facebook': {'id': '75', 'access_token': 'fffdjhf'}}},
+     'services': {'facebook': {'id': '75'}}},
 
     # Email address
     {'name': 'Jack Harness', 'email': 'clueless@wall.north'}
@@ -152,7 +146,7 @@ def test_create_user_conflict_errors(model, client, data):
 
 def test_partially_failed_creation_doesnt_leave_behind_data(model, client):
     data = {'name': 'Peter Jonson', 'email': 'hfg@uf.o.fi',
-            'services': {'facebook': {'id': '75', 'access_token': ''}}}
+            'services': {'facebook': {'id': '75'}}}
     result = client.post_json('/', data, expect_errors=True)
     assert result.status_code == 409
 
@@ -168,35 +162,35 @@ def test_partially_failed_creation_doesnt_leave_behind_data(model, client):
         {'user_id': 1},
         {'id': 1, 'name': "Ned Stark", 'email': "hand@headless.north",
          'picture_url': "http://mock.io/gallows.jpg",
-         'github': {'id': 1000, 'access_token': ""}}
+         'github': {'id': 1000}}
     ),
     (
         {'email': 'hand@headless.north'},
         {'id': 1, 'name': "Ned Stark", 'email': "hand@headless.north",
          'picture_url': "http://mock.io/gallows.jpg",
-         'github': {'id': 1000, 'access_token': ""}}
+         'github': {'id': 1000}}
     ),
     (
         {'facebook_id': 1000},
         {'id': 2, 'name': "Jon Snow", 'email': "clueless@wall.north",
-         'facebook': {'id': 1000, 'access_token': ""}}
+         'facebook': {'id': 1000}}
     ),
     (
         {'facebook_id': 1000, 'user_id': 2},
         {'id': 2, 'name': "Jon Snow", 'email': "clueless@wall.north",
-         'facebook': {'id': 1000, 'access_token': ""}}
+         'facebook': {'id': 1000}}
     ),
     (
         {'github_id': 1000},
         {'id': 1, 'name': "Ned Stark", 'email': "hand@headless.north",
          'picture_url': "http://mock.io/gallows.jpg",
-         'github': {'id': 1000, 'access_token': ""}}
+         'github': {'id': 1000}}
     ),
     (
         {'github_id': 1000, 'user_id': 1},
         {'id': 1, 'name': "Ned Stark", 'email': "hand@headless.north",
          'picture_url': "http://mock.io/gallows.jpg",
-         'github': {'id': 1000, 'access_token': ""}}
+         'github': {'id': 1000}}
     ),
 ])
 async def test_get_user(model, helpers, query, expected):
@@ -250,28 +244,28 @@ async def test_get_user_request_errors(model, helpers, query):
         1,
         {'name': "Ned Stark", 'email': "hand@headless.north",
          'picture_url': "foo", 'id': 1,
-         'github': {'id': 1000, 'access_token': ""}}
+         'github': {'id': 1000}}
     ),
     (
         [{'op': 'add', 'path': '/github/id', 'value': 56498}],
         1,
         {'name': "Ned Stark", 'email': "hand@headless.north", 'id': 1,
          'picture_url': 'http://mock.io/gallows.jpg',
-         'github': {'id': 56498, 'access_token': ""}}
+         'github': {'id': 56498}}
     ),
     (
         [{'op': 'add', 'path': '/github',
-          'value': {'id': 56498, 'access_token': ''}}],
+          'value': {'id': 56498}}],
         2,
         {'name': "Jon Snow", 'email': "clueless@wall.north", 'id': 2,
-         'github': {'id': 56498, 'access_token': ""},
-         'facebook': {'id': 1000, 'access_token': ""}}
+         'github': {'id': 56498},
+         'facebook': {'id': 1000}}
     ),
     (
         [{'op': 'remove', 'path': '/github'}],
         3,
         {'name': "Rob Stark", 'email': "king@deceased.north", 'id': 3,
-         'facebook': {'id': 75, 'access_token': ""}}
+         'facebook': {'id': 75}}
     ),
 
 ])
@@ -365,9 +359,9 @@ async def test_patch_user_errors(model, helpers, ops, user_id, expected_exc):
                             'value': 'Tim Brunt'}]}),
     ('create', create_user,
      {'name': 'Tim Brunt', 'email': 'tim.brunt@foo.bar',
-      'github': {'id': 5555, 'access_token': ''}},
+      'github': {'id': 5555}},
      {'id': 4, 'name': 'Tim Brunt', 'email': 'tim.brunt@foo.bar',
-      'github': {'id': 5555, 'access_token': ''}}),
+      'github': {'id': 5555}}),
 ])
 async def test_user_notification(
         model, helpers, amqpchannel, name, func, data, expected):
