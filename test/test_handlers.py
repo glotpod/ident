@@ -1,9 +1,14 @@
 import asyncio
 import json
 import logging
+import re
 
 import pytest
 
+from urllib.parse import urlencode
+
+from hypothesis import given
+from hypothesis.strategies import integers
 from webtest_aiohttp import TestApp as WebtestApp
 from phi.common.ident.handlers import create_user, get_user, patch_user,\
     HandlerError
@@ -22,7 +27,7 @@ def model(model):
     id = model.add_user(name="Jon Snow", email_address="clueless@wall.north")
     model.add_facebook_info(sv_id=1000, user_id=id)
 
-    id = model.add_user(name="Rob Stark", email_address="king@deceased.north")
+    id = model.add_user(name="Robb Stark", email_address="king@deceased.north")
     model.add_github_info(sv_id=25, user_id=id)
     model.add_facebook_info(sv_id=75, user_id=id)
 
@@ -42,7 +47,7 @@ def model(model):
     ),
     (
         3,
-        {'id': 3, 'name': "Rob Stark", 'email': "king@deceased.north",
+        {'id': 3, 'name': "Robb Stark", 'email': "king@deceased.north",
          'services': {'facebook': {'id': '75'},
                       'github': {'id': '25'}}}
     ),
@@ -153,6 +158,105 @@ def test_partially_failed_creation_doesnt_leave_behind_data(model, client):
     data['services']['facebook']['id'] = '76'
     result = client.post_json('/', data)
     assert result.status_code == 201
+
+
+@pytest.mark.parametrize('params, matched_ids', [
+    ({}, [1, 2, 3]),
+    (dict(email="clueless@wall.north"), [2]),
+    (dict(name="Robb Stark"), [3]),
+
+    (dict(name="Stark"), []),
+    (dict(name="Snow", email="clueless@wall.north"), []),
+
+    (dict(name="Stark", email="clueless@wall.north"), []),
+    (dict(name="Rickon Stark"), []),
+])
+def test_search_users(model, client, params, matched_ids):
+    result = client.get('/?{}'.format(urlencode(params)))
+    assert result.status_code == 200
+    assert [item['id'] for item in result.json] == matched_ids
+
+
+@given(integers(min_value=1))
+def test_search_item_limit(model, client, page_size):
+    result = client.get('/?page_size={}'.format(page_size))
+    assert result.status_code == 200
+    assert len(result.json) <= page_size
+
+
+def test_search_page_links(model, client):
+    def get_links(links_header):
+        return {
+            match[0]: match[1]
+            for match in
+            re.findall(r"<(.*?)>;\srel=([a-z]+)", header, re.I)
+        }
+
+    result = client.get('/?page_size=1')
+    first_set = result.json
+
+    # Check for a link header
+    assert "link" in result.headers
+
+    # Destructure the link header
+    links = get_links(results.headers['link'])
+
+    # There should be at least three pages
+    assert 'next' in links
+    assert 'previous' not in links
+
+    # Get the second page, and check its links
+    result = client.get(links['next'])
+    second_set = result.json
+    links = get_links(results.headers['link'])
+    assert 'next' in links
+    assert 'previous' in links
+
+    # Check that getting the previous link from the second is the same as
+    # getting the first page
+    result = client.get(links['previous'])
+    assert result.json == first_set
+
+    # Go to the last page and check its links
+    result = client.get(links['next'])
+    links = get_links(results.headers['link'])
+    assert 'next' not in links
+    assert 'previous' not in links
+
+    # Check that getting the previous link from the third page is the same
+    # as getting the second page
+    result = client.get(links['previous'])
+    assert result.json == second_set
+
+
+@pytest.mark.parametrize('mediatype, expected', [
+    (
+        'application/json',
+        {'id': 1, 'name': "Ned Stark", 'email': "hand@headless.north",
+         'services': {'github': {'id': '1000'}}}
+    ),
+    (
+        None,
+        {'id': 1, 'name': "Ned Stark", 'email': "hand@headless.north",
+         'services': {'github': {'id': '1000'}}}
+    ),
+    ('application/vnd.phi.resource-url+json', '/1'),
+
+    ('text/plain', None),
+    ('text/json', None),
+    ('text/html', None),
+    ('application/vnd.phi.links+json', None)
+])
+def test_search_page_media_types(model, client, mediatype, expected):
+    headers = {"Accept": mediatype} if mediatype else {}
+    result = client.get("/", headers=headers, expect_errors=expected is None)
+
+    if expected is None:
+        assert result.status_code == 406
+
+    else:
+        assert result.status_code == 200
+        assert result.json[0] == expected
 
 """
 @pytest.mark.asyncio
