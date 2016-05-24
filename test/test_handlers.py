@@ -48,7 +48,6 @@ def model(model):
     ),
     (4, None),
     (0, None),
-    ("", None),
     (99232832432423423, None),
     (-1, None)
 ])
