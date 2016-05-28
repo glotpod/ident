@@ -50,7 +50,8 @@ License
     packages=["phi.common." + pkg for pkg in find_packages('src/phi/common')],
     install_requires=['cryptography~=1.3.0', 'SQLAlchemy~=1.0.12',
                       'aiopg~=0.9.2', 'toml~=0.9.1', 'aiohttp~=0.21.6',
-                      'voluptuous~=0.8.10', 'jsonpatch~=1.13'],
+                      'voluptuous~=0.8.10', 'jsonpatch~=1.13',
+                      'mimetype-match~=1.0.4'],
 
     extras_require={
     },

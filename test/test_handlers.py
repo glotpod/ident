@@ -10,8 +10,6 @@ from urllib.parse import urlencode
 from hypothesis import given
 from hypothesis.strategies import integers
 from webtest_aiohttp import TestApp as WebtestApp
-from phi.common.ident.handlers import create_user, get_user, patch_user,\
-    HandlerError
 
 
 @pytest.fixture
@@ -165,9 +163,8 @@ def test_partially_failed_creation_doesnt_leave_behind_data(model, client):
     (dict(email="clueless@wall.north"), [2]),
     (dict(name="Robb Stark"), [3]),
 
-    (dict(name="Stark"), []),
-    (dict(name="Snow", email="clueless@wall.north"), []),
-
+    (dict(name="Stark"), [1, 3]),
+    (dict(name="Snow", email="clueless@wall.north"), [2]),
     (dict(name="Stark", email="clueless@wall.north"), []),
     (dict(name="Rickon Stark"), []),
 ])

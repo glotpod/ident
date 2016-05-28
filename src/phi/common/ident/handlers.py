@@ -2,17 +2,22 @@ import json
 
 import jsonpatch
 
+from collections import deque
 from collections.abc import Mapping
 from functools import reduce
+from urllib.parse import parse_qsl
 
 from aiohttp import web
+from mimetype_match import AcceptHeader
 from psycopg2 import DataError, IntegrityError, errorcodes
-from sqlalchemy.sql import select
-from voluptuous import All, Any, Schema, Required, Remove, Length, MultipleInvalid
+from sqlalchemy.sql import select, desc, func
+from voluptuous import All, Any, Coerce, Schema, Range, Required, Remove, \
+    Length, MultipleInvalid
 
 from phi.common.ident.model import users, services
 
-__all__ = ['create_user', 'get_user', 'patch_user', 'HandlerError']
+
+__all__ = ['create_user', 'get_user', 'search', 'patch_user', 'HandlerError']
 
 
 user_schema = Schema({
@@ -25,6 +30,172 @@ user_schema = Schema({
         }
     },
 })
+
+service_name_map = {'fb': 'facebook', 'gh': 'github'}
+
+
+class AllUsers(web.View):
+    params_schema = Schema({
+        'name': str,
+        'email': str,
+        'page_size': All(Coerce(int), Range(min=1)),
+        'after_id': All(Coerce(int), Range(min=1)),
+        'before_id': All(Coerce(int), Range(min=1)),
+        'first': str
+    })
+
+    @staticmethod
+    def build_query(params, full=False):
+        columns = [users.c.id, users.c.name, users.c.email_address] if full \
+                  else [users.c.id]
+
+        query = select(columns)
+
+        query = query.order_by(users.c.id)
+
+        if 'email' in params:
+            query = query.where(users.c.email_address == params['email'])
+
+        if 'name' in params:
+            search_string = " & ".join(
+                "{}:*".format(word) for word in params['name'].split(' ')
+            )
+            name_vector = func.to_tsvector(users.c.name)
+
+            query = query.where(name_vector.match(search_string))
+            query = query.order_by(
+                desc(func.ts_rank(name_vector, func.to_tsquery(search_string)))
+            )
+
+        # if 'page_size' in params:
+        #     query = query.limit(params['page_size'])
+        return query
+
+    @staticmethod
+    def get_best_mimetype(request, mimetypes):
+        # Get the best matching mimetype from the given set, or raise an http
+        # error if a good match can't be provided
+        if 'accept' in request.headers:
+            accept = AcceptHeader(request.headers.get('accept', '*/*'))
+            match = accept.get_best_match(mimetypes)
+
+            if match is None:
+                raise web.HTTPNotAcceptable
+
+            else:
+                return match[1]
+
+        else:
+            return mimetypes[0]
+
+    async def get(self):
+        mimetype = self.get_best_mimetype(self.request, [
+            'application/json', 'application/vnd.phi.resource-url+json'
+        ])
+        query = self.build_query(self.params, mimetype=='application/json')
+        results = []
+
+        async with self.request['db_pool'].acquire() as conn:
+            async for row in conn.execute(query):
+                item = {col:row[col] for col in row
+                        if col in ('id', 'name', 'email_address')}
+
+                if mimetype == 'application/json':
+                    item['email'] = item.pop('email_address')
+                    item['services'] = {}
+
+                    qry = services.select().where(
+                        services.c.user_id == row['id'])
+
+                    async for service_row in conn.execute(qry):
+                        name = service_name_map[service_row['sv_name']]
+                        item['services'][name] = {'id': service_row['sv_id']}
+
+                else:
+                    item = "/{}".format(row['id'])
+
+                results.append(item)
+
+            return web.json_response(results, content_type=mimetype)
+
+    async def post(self):
+        try:
+            # Make sure the incoming data is in a valid format
+            # if request.content_type == "application/x-www-form-urlencoded":
+            #     data = user_schema(await request.post())
+
+            # else:
+            #     data = user_schema(await request.json())
+
+            # fixme: no standard on nested data structures with urlencoded
+            data = user_schema(await self.request.json())
+
+            # Get a database connection from the pool
+            async with self.request['db_pool'].acquire() as conn:
+                # Create a transaction for the insertion queries; this
+                # is an all or nothing deal
+                async with conn.begin() as transaction:
+                    # Construct the insert query to create the user object
+                    query = users.insert().values(
+                        name=data['name'],
+                        email_address=data['email']
+                    )
+                    user_id = await conn.scalar(query.returning(users.c.id))
+
+                    data.setdefault('services', {})
+
+                    if 'facebook' in data['services']:
+                        await conn.execute(
+                            services.insert().values(
+                                user_id=user_id,
+                                sv_name='fb',
+                                sv_id=data['services']['facebook']['id']
+                            )
+                        )
+
+                    if 'github' in data['services']:
+                        await conn.execute(
+                            services.insert().values(
+                                user_id=user_id,
+                                sv_name='gh',
+                                sv_id=data['services']['github']['id']
+                            )
+                        )
+
+        except MultipleInvalid:
+            raise web.HTTPBadRequest
+
+        except IntegrityError as e:
+            if e.pgcode == errorcodes.UNIQUE_VIOLATION:
+                raise web.HTTPConflict
+            else:
+                raise
+
+        else:
+            # Construct the
+            data['id'] = user_id
+
+            # # Send a notification about the creation of this user
+            # await helpers['notify'](json.dumps(data).encode('utf-8'))
+
+            # Construct a URL to the resource
+            user_url = self.request.app.router.named_resources()['user'].url(
+                parts={'user_id': user_id}
+            )
+
+            # ... and headers
+            headers = {'Location': user_url}
+
+            return web.json_response({'id': user_id}, status=201,
+                                     headers=headers)
+
+    @property
+    def params(self):
+        try:
+            items = dict(parse_qsl(self.request.query_string))
+            return self.params_schema(items)
+        except MultipleInvalid:
+            raise web.HTTPBadRequest
 
 
 async def get_user(request):
@@ -55,140 +226,6 @@ async def get_user(request):
             raise web.HTTPNotFound
 
         return web.json_response(user_data)
-
-
-async def __OLD_get_user(helpers, *, user_id=None, email=None,
-                   github_id=None, facebook_id=None):
-    conn = helpers['db_conn']
-    decrypt = helpers['db_fernet'].decrypt
-
-    searches = []
-
-    if user_id is not None:
-        searches.append(users.c.id == user_id)
-
-    if github_id is not None:
-        searches.append(
-            (services.c.sv_id == github_id) &
-            (services.c.sv_name == 'gh')
-        )
-
-    if facebook_id is not None:
-        searches.append(
-            (services.c.sv_id == facebook_id) &
-            (services.c.sv_name == 'fb')
-        )
-
-    if email is not None:
-        searches.append(users.c.email_address == email)
-
-    qry = select(
-        [users, services],
-        for_update=helpers.get('lock_rows', False)  # patch_user may ask it
-    ).where(
-        reduce(lambda a, b: a & b, searches)
-    ).where(users.c.id == services.c.user_id)
-
-    user_data = {}
-
-    try:
-        async for row in conn.execute(qry):
-            user_data['id'] = row['id']
-            user_data['name'] = row['name']
-            user_data['email'] = row['email_address']
-
-            if row['picture_url'] is not None:
-                user_data['picture_url'] = row['picture_url']
-
-            if row['sv_id'] is not None:
-                data = {
-                    'id': row['sv_id'],
-                    'access_token': decrypt(
-                        row['access_token'].tobytes()
-                    ).decode('utf-8')
-                }
-                key = 'facebook' if row['sv_name'] == 'fb' else 'github'
-                user_data[key] = data
-
-    except DataError:
-        pass
-
-    if not user_data:
-        raise HandlerError('not_found')
-    else:
-        return user_data
-
-
-async def create_user(request):
-    try:
-        # Make sure the incoming data is in a valid format
-        # if request.content_type == "application/x-www-form-urlencoded":
-        #     data = user_schema(await request.post())
-
-        # else:
-        #     data = user_schema(await request.json())
-
-        # fixme: no standard on nested data structures with urlencoded
-        data = user_schema(await request.json())
-
-        # Get a database connection from the pool
-        async with request['db_pool'].acquire() as conn:
-            # Create a transaction for the insertion queries; this
-            # is an all or nothing deal
-            async with conn.begin() as transaction:
-                # Construct the insert query to create the user object
-                query = users.insert().values(
-                    name=data['name'],
-                    email_address=data['email']
-                )
-                user_id = await conn.scalar(query.returning(users.c.id))
-
-                data.setdefault('services', {})
-
-                if 'facebook' in data['services']:
-                    await conn.execute(
-                        services.insert().values(
-                            user_id=user_id,
-                            sv_name='fb',
-                            sv_id=data['services']['facebook']['id']
-                        )
-                    )
-
-                if 'github' in data['services']:
-                    await conn.execute(
-                        services.insert().values(
-                            user_id=user_id,
-                            sv_name='gh',
-                            sv_id=data['services']['github']['id']
-                        )
-                    )
-
-    except MultipleInvalid:
-        raise web.HTTPBadRequest
-
-    except IntegrityError as e:
-        if e.pgcode == errorcodes.UNIQUE_VIOLATION:
-            print(e)
-            raise web.HTTPConflict
-        else:
-            raise
-
-    else:
-        # Construct the
-        data['id'] = user_id
-
-        # # Send a notification about the creation of this user
-        # await helpers['notify'](json.dumps(data).encode('utf-8'))
-
-        # Construct a URL to the resource
-        user_url = request.app.router.named_resources()['user'].url(
-            parts={'user_id': user_id}
-        )
-
-        # ... and headers
-        headers = {'Location': user_url}
-
-        return web.json_response({'id': user_id}, status=201, headers=headers)
 
 
 async def patch_user(helpers, user_id, ops):
