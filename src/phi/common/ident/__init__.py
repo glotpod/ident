@@ -144,7 +144,7 @@ def init_app(_, *, loop=None):
     app['config'] = load_config()
 
     app.router.add_route('*', '/', handlers.AllUsers, name='user-list')
-    app.router.add_route('get', '/{user_id}', handlers.get_user, name='user')
+    app.router.add_route('*', '/{id}', handlers.User, name='user')
 
     return app
 

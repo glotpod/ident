@@ -9,7 +9,6 @@ from sqlalchemy import create_engine
 from cryptography.fernet import Fernet
 from phi.common.ident import load_config, init_app, fernet_middleware_factory
 from phi.common.ident.model import metadata, users, services
-from phi.common.ident.handlers import HandlerError
 
 
 class ModelFixture:

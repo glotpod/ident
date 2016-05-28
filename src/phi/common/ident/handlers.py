@@ -17,19 +17,7 @@ from voluptuous import All, Any, Coerce, Schema, Range, Required, Remove, \
 from phi.common.ident.model import users, services
 
 
-__all__ = ['create_user', 'get_user', 'search', 'patch_user', 'HandlerError']
-
-
-user_schema = Schema({
-    Remove('id'): int,
-    Required('name'): All(str, str.strip, Length(min=1)),
-    Required('email'): All(str, str.strip, Length(min=1)),
-    'services': {
-        Any('github', 'facebook'): {
-            Required('id'): All(str, str.strip, Length(min=1))
-        }
-    },
-})
+__all__ = ['AllUsers', 'User']
 
 service_name_map = {'fb': 'facebook', 'gh': 'github'}
 
@@ -128,7 +116,7 @@ class AllUsers(web.View):
             #     data = user_schema(await request.json())
 
             # fixme: no standard on nested data structures with urlencoded
-            data = user_schema(await self.request.json())
+            data = User.schema(await self.request.json())
 
             # Get a database connection from the pool
             async with self.request['db_pool'].acquire() as conn:
@@ -180,7 +168,7 @@ class AllUsers(web.View):
 
             # Construct a URL to the resource
             user_url = self.request.app.router.named_resources()['user'].url(
-                parts={'user_id': user_id}
+                parts={'id': user_id}
             )
 
             # ... and headers
@@ -198,34 +186,46 @@ class AllUsers(web.View):
             raise web.HTTPBadRequest
 
 
-async def get_user(request):
-    user_id = request.match_info['user_id']
+class User(web.View):
+    schema = Schema({
+        Remove('id'): int,
+        Required('name'): All(str, str.strip, Length(min=1)),
+        Required('email'): All(str, str.strip, Length(min=1)),
+        'services': {
+            Any('github', 'facebook'): {
+                Required('id'): All(str, str.strip, Length(min=1))
+            }
+        },
+    })
 
-    try:
-        user_id = int(user_id)
-    except:
-        raise web.HTTPNotFound
+    async def get(self):
+        user_id = self.request.match_info['id']
 
-    async with request['db_pool'].acquire() as conn:
-        user_data = {}
-        query = select([users, services]).where(users.c.id == user_id)
-        query = query.where(users.c.id == services.c.user_id)
-
-        async for row in conn.execute(query):
-            user_data['id'] = row['id']
-            user_data['name'] = row['name']
-            user_data['email'] = row['email_address']
-            user_data.setdefault('services', {})
-
-            if row['sv_id'] is not None:
-                data = {'id': row['sv_id']}
-                key = 'facebook' if row['sv_name'] == 'fb' else 'github'
-                user_data['services'][key] = data
-
-        if not user_data:
+        try:
+            user_id = int(user_id)
+        except:
             raise web.HTTPNotFound
 
-        return web.json_response(user_data)
+        async with self.request['db_pool'].acquire() as conn:
+            user_data = {}
+            query = select([users, services]).where(users.c.id == user_id)
+            query = query.where(users.c.id == services.c.user_id)
+
+            async for row in conn.execute(query):
+                user_data['id'] = row['id']
+                user_data['name'] = row['name']
+                user_data['email'] = row['email_address']
+                user_data.setdefault('services', {})
+
+                if row['sv_id'] is not None:
+                    data = {'id': row['sv_id']}
+                    key = 'facebook' if row['sv_name'] == 'fb' else 'github'
+                    user_data['services'][key] = data
+
+            if not user_data:
+                raise web.HTTPNotFound
+
+            return web.json_response(user_data)
 
 
 async def patch_user(helpers, user_id, ops):
@@ -310,21 +310,3 @@ async def patch_user(helpers, user_id, ops):
             await notify(json_data.encode('utf-8'))
 
             return ops
-
-
-class HandlerError(Exception, Mapping):
-    def __init__(self, error, **fields):
-        self._data = dict(error=error, **fields)
-        super().__init__(error)
-
-    def __iter__(self):
-        yield from self._data
-
-    def __len__(self):
-        return len(self._data)
-
-    def __getitem__(self, key):
-        return self._data[key]
-
-    def __hash__(self):
-        return hash(frozenset(self._data.items()))
