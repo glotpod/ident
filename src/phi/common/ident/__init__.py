@@ -10,7 +10,7 @@ from aiohttp import web
 from aiopg.sa import create_engine
 from cryptography.fernet import Fernet
 
-from phi.common.ident import handlers
+from phi.common.ident import handlers, notifications
 
 
 def load_config():
@@ -135,10 +135,23 @@ async def logging_middleware_factory(app, handler):
     return middleware_handler
 
 
+async def subscribers_middleware_factory(app, handler):
+    # This middleware sends events to the notifications micro-service
+    if 'subscribers' not in app:
+        app['subscribers'] = sender = notifications.Sender(app.loop)
+
+        async def cleanup(app):
+            await sender.cleanup()
+
+        app.on_shutdown.append(cleanup)
+
+    return handler
+
+
 def init_app(_, *, loop=None):
     """Initialise the application object, to be served by aiohttp."""
     middlewares = [db_pool_middleware_factory, fernet_middleware_factory,
-                   logging_middleware_factory]
+                   subscribers_middleware_factory, logging_middleware_factory]
 
     app = web.Application(loop=loop, middlewares=middlewares)
     app['config'] = load_config()

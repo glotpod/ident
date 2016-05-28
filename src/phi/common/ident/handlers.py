@@ -164,9 +164,6 @@ class AllUsers(web.View):
             # Construct the
             data['id'] = user_id
 
-            # # Send a notification about the creation of this user
-            # await helpers['notify'](json.dumps(data).encode('utf-8'))
-
             # Construct a URL to the resource
             user_url = self.request.app.router.named_resources()['user'].url(
                 parts={'id': user_id}
@@ -174,6 +171,11 @@ class AllUsers(web.View):
 
             # ... and headers
             headers = {'Location': user_url}
+
+            # Send a notification about the creation of this user
+            self.request.app['subscribers'].notify(
+                user_id, 'urn:phi:user:new', 'user+n', data
+            )
 
             return web.json_response({'id': user_id}, status=201,
                                      headers=headers)
@@ -268,6 +270,12 @@ class User(web.View):
 
                 else:
                     patched['id'] = self.id
+
+                    # Send a notification about this user being patched
+                    self.request.app['subscribers'].notify(
+                        self.id, 'urn:phi:user:patch', 'user+n', ops
+                    )
+
                     return web.json_response(patched)
 
     async def get_user_data(self, conn, *, id=None, lock_rows=False):
