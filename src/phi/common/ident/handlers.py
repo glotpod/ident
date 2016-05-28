@@ -14,6 +14,7 @@ from sqlalchemy.sql import select, desc, func
 from voluptuous import All, Any, Coerce, Schema, Range, Required, Remove, \
     Length, MultipleInvalid
 
+from phi.common.ident import errors
 from phi.common.ident.model import users, services
 
 
@@ -199,33 +200,104 @@ class User(web.View):
     })
 
     async def get(self):
-        user_id = self.request.match_info['id']
+        async with self.request['db_pool'].acquire() as conn:
+            return web.json_response(await self.get_user_data(conn))
 
-        try:
-            user_id = int(user_id)
-        except:
-            raise web.HTTPNotFound
+    async def patch(self):
+        supported = ("application/json-patch+json", "application/octet-stream")
+        if self.request.content_type not in supported:
+            headers = {"Accept-Patch": "application/json-patch+json"}
+            raise web.HTTPUnsupportedMediaType(headers=headers)
 
         async with self.request['db_pool'].acquire() as conn:
-            user_data = {}
-            query = select([users, services]).where(users.c.id == user_id)
-            query = query.where(users.c.id == services.c.user_id)
+            async with conn.begin() as transaction:
+                data = await self.get_user_data(conn, lock_rows=True)
 
-            async for row in conn.execute(query):
-                user_data['id'] = row['id']
-                user_data['name'] = row['name']
-                user_data['email'] = row['email_address']
-                user_data.setdefault('services', {})
+                try:
+                    ops = await self.request.json()
+                    patched = self.schema(jsonpatch.apply_patch(data, ops))
+                except (TypeError, ValueError, jsonpatch.InvalidJsonPatch,
+                        jsonpatch.JsonPointerException):
+                    raise web.HTTPBadRequest
+                except MultipleInvalid:
+                    raise errors.HTTPUnprocessableEntity
 
-                if row['sv_id'] is not None:
-                    data = {'id': row['sv_id']}
-                    key = 'facebook' if row['sv_name'] == 'fb' else 'github'
-                    user_data['services'][key] = data
+                try:
+                    query = users.update() \
+                        .where(users.c.id == self.id) \
+                        .values(name=patched['name'],
+                                email_address=patched['email'])
 
-            if not user_data:
-                raise web.HTTPNotFound
+                    await conn.execute(query)
 
-            return web.json_response(user_data)
+                    for key, svc_name in (('facebook', 'fb'), ('github', 'gh')):
+                        matched_record = (
+                            (services.c.user_id == self.id) &
+                            (services.c.sv_name == svc_name)
+                        )
+
+                        if (key not in patched['services']
+                                and key in data['services']):
+                            # if the service was there before, it has to be
+                            # removed
+                            qry = services.delete(matched_record)
+                            await conn.execute(qry)
+
+                        elif key in patched['services']:
+                            args = {'sv_id': patched['services'][key]['id']}
+
+                            if key in data['services']:
+                                qry = services.update(matched_record).values(
+                                    args
+                                )
+
+                            else:
+                                qry = services.insert().values(
+                                    sv_name=svc_name,
+                                    user_id=self.id,
+                                    **args
+                                )
+
+                            await conn.execute(qry)
+
+                except IntegrityError as e:
+                    if e.pgcode == errorcodes.UNIQUE_VIOLATION:
+                        raise web.HTTPConflict
+                    else:
+                        raise
+
+                else:
+                    patched['id'] = self.id
+                    return web.json_response(patched)
+
+    async def get_user_data(self, conn, *, id=None, lock_rows=False):
+        data = {}
+        query = select([users, services], for_update=lock_rows)
+        query = query.where(users.c.id == self.id)
+        query = query.where(users.c.id == services.c.user_id)
+
+        async for row in conn.execute(query):
+            data['id'] = row['id']
+            data['name'] = row['name']
+            data['email'] = row['email_address']
+            data.setdefault('services', {})
+
+            if row['sv_id'] is not None:
+                service_data = {'id': row['sv_id']}
+                key = 'facebook' if row['sv_name'] == 'fb' else 'github'
+                data['services'][key] = service_data
+
+        if not data:
+            raise web.HTTPNotFound
+
+        return data
+
+    @property
+    def id(self):
+        try:
+            return int(self.request.match_info['id'])
+        except TypeError:
+            raise web.HTTPNotFound
 
 
 async def patch_user(helpers, user_id, ops):

@@ -255,235 +255,95 @@ def test_search_page_media_types(model, client, mediatype, expected):
         assert result.status_code == 200
         assert result.json[0] == expected
 
-"""
-@pytest.mark.asyncio
-@pytest.mark.parametrize('query,expected', [
+
+@pytest.mark.parametrize('ops, id, expected', [
     (
-        {'user_id': 1},
-        {'id': 1, 'name': "Ned Stark", 'email': "hand@headless.north",
-         'picture_url': "http://mock.io/gallows.jpg",
-         'github': {'id': 1000}}
-    ),
-    (
-        {'email': 'hand@headless.north'},
-        {'id': 1, 'name': "Ned Stark", 'email': "hand@headless.north",
-         'picture_url': "http://mock.io/gallows.jpg",
-         'github': {'id': 1000}}
-    ),
-    (
-        {'facebook_id': 1000},
-        {'id': 2, 'name': "Jon Snow", 'email': "clueless@wall.north",
-         'facebook': {'id': 1000}}
-    ),
-    (
-        {'facebook_id': 1000, 'user_id': 2},
-        {'id': 2, 'name': "Jon Snow", 'email': "clueless@wall.north",
-         'facebook': {'id': 1000}}
-    ),
-    (
-        {'github_id': 1000},
-        {'id': 1, 'name': "Ned Stark", 'email': "hand@headless.north",
-         'picture_url': "http://mock.io/gallows.jpg",
-         'github': {'id': 1000}}
-    ),
-    (
-        {'github_id': 1000, 'user_id': 1},
-        {'id': 1, 'name': "Ned Stark", 'email': "hand@headless.north",
-         'picture_url': "http://mock.io/gallows.jpg",
-         'github': {'id': 1000}}
-    ),
-])
-async def test_get_user(model, helpers, query, expected):
-    user = await get_user(helpers, **query)
-    assert user == expected
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize('query', [
-    {'facebook_id': ''},
-    {'github_id': 'ranger'},
-    {'facebook_id': 40000},
-    {'github_id': -403242633240},
-    {'github_id': 10876.535},
-    {'user_id': ''},
-    {'user_id': 'ewdjdsfkjd'},
-    {'user_id': 10.38630},
-    {'user_id': 0},
-    {'user_id': 10023483283427},
-    {'facebook_id': 'dskfh', 'user_id': 1},
-])
-async def test_get_user_not_found_errors(model, helpers, query):
-    with pytest.raises(HandlerError) as excinfo:
-        await get_user(helpers, **query)
-
-    assert excinfo.value['error'] == 'not_found'
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize('query', [
-    {},
-    {'foo': 294239847234832},
-    {'github_access_token': "dsfsldjfhsdfkjsdlfjsdlfkjlk"}
-])
-async def test_get_user_request_errors(model, helpers, query):
-    with pytest.raises(TypeError):
-        await get_user(helpers, **query)
-
-
-
-
-
-
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize('ops, user_id, expected', [
-    (
-        [{'op': 'replace', 'path': '/picture_url', 'value': 'foo'},
-         {'op': 'test', 'path': '/github/id', 'value': 1000}],
+        [{'op': 'test', 'path': '/services/github/id', 'value': '1000'}],
         1,
         {'name': "Ned Stark", 'email': "hand@headless.north",
-         'picture_url': "foo", 'id': 1,
-         'github': {'id': 1000}}
+         'id': 1, 'services': {'github': {'id': '1000'}}}
     ),
     (
-        [{'op': 'add', 'path': '/github/id', 'value': 56498}],
+        [{'op': 'add', 'path': '/services/github/id', 'value': '56498'}],
         1,
         {'name': "Ned Stark", 'email': "hand@headless.north", 'id': 1,
-         'picture_url': 'http://mock.io/gallows.jpg',
-         'github': {'id': 56498}}
+         'services': {'github': {'id': '56498'}}}
     ),
     (
-        [{'op': 'add', 'path': '/github',
-          'value': {'id': 56498}}],
+        [{'op': 'add', 'path': '/services/github', 'value': {'id': '56498'}}],
         2,
         {'name': "Jon Snow", 'email': "clueless@wall.north", 'id': 2,
-         'github': {'id': 56498},
-         'facebook': {'id': 1000}}
+         'services': {'github': {'id': '56498'}, 'facebook': {'id': '1000'}}}
     ),
     (
-        [{'op': 'remove', 'path': '/github'}],
+        [{'op': 'remove', 'path': '/services/github'}],
         3,
-        {'name': "Rob Stark", 'email': "king@deceased.north", 'id': 3,
-         'facebook': {'id': 75}}
+        {'name': "Robb Stark", 'email': "king@deceased.north", 'id': 3,
+         'services': {'facebook': {'id': '75'}}}
     ),
 
 ])
-async def test_patch_user(model, helpers, ops, user_id, expected):
-    await patch_user(helpers, user_id, ops)
-    user = await get_user(helpers, user_id=user_id)
-    assert user == expected
+def test_patch_user(model, client, ops, id, expected):
+    headers = {'Content-Type': 'application/json-patch+json'}
+    result = client.patch_json("/{}".format(id), ops, headers=headers)
+    assert result.status_code == 200
+
+    assert client.get("/{}".format(id)).json == expected
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize('ops, user_id, expected_exc', [
+@pytest.mark.parametrize('ops,id,code', [
     (
-        [{'ofp': 'remove', 'path': '/github'}],
+        [{'ofp': 'remove', 'path': '/services/github'}],
         3,
-        ValueError
+        400
     ),
     (
-        [{'op': 'remove', 'path': 'github'}],
+        [{'op': 'remove', 'path': 'services/github'}],
         3,
-        ValueError
+        400
+    ),
+    (0, 3, 400),
+    ("dfdfsdfsdsgetefddfsdfsdfdf", 3, 400),
+    (
+        [{'op': 'remove', 'path': '/path/doesnt/exist'}],
+        1,
+        400
     ),
     (
-        0,
-        3,
-        ValueError
-    ),
-    (
-        "dsdfdfswdffssdf",
-        3,
-        ValueError
-    ),
-
-    (
-        [{'op': 'remove', 'path': '/github'}],
-        2,
-        'patch_failed'
-    ),
-    (
-        [{'op': 'replace', 'path': '/github', 'value': {}}],
-        2,
-        'patch_failed'
+        [{'op': 'replace', 'path': '/path/doesnt/exist', 'value': {}}],
+        1,
+        400
     ),
 
     (
         [{'op': 'replace', 'path': '/email', 'value': 'clueless@wall.north'}],
         1,
-        'conflict'
+        409
     ),
     (
-        [{'op': 'replace', 'path': '/github/id', 'value': 25}],
+        [{'op': 'replace', 'path': '/services/github/id', 'value': '25'}],
         1,
-        'conflict'
-    ),
-    (
-        [{'op': 'replace', 'path': '/facebook/id', 'value': 75}],
-        2,
-        'conflict'
+        409
     ),
 
     (
-        [{'op': 'replace', 'path': '/facebook/id', 'value': 'foo'}],
+        [{'op': 'replace', 'path': '/email', 'value': 34}],
         2,
-        'invalid_patch_result'
+        422
     ),
     (
-        [{'op': 'move', 'path': '/facebooook', 'from': '/facebook'}],
+        [{'op': 'move', 'path': '/facebooook', 'from': '/services/facebook'}],
         2,
-        'invalid_patch_result'
+        422
     ),
 ])
-async def test_patch_user_errors(model, helpers, ops, user_id, expected_exc):
-    handler_error = None
-
-    if isinstance(expected_exc, str):
-        handler_error = expected_exc
-        expected_exc = HandlerError
-
-    with pytest.raises(expected_exc) as excinfo:
-        await patch_user(helpers, user_id, ops)
-
-    if handler_error is not None:
-        assert excinfo.value['error'] == handler_error
+def test_patch_user_errors(model, client, ops, id, code):
+    headers = {'Content-Type': 'application/json-patch+json'}
+    result = client.patch_json("/{}".format(id), ops, expect_errors=True,
+                               headers=headers)
+    assert result.status_code == code
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize('name,func,data,expected', [
-    ('patch', patch_user,
-     {'user_id': 3, 'ops': [{'op': 'replace', 'path': '/name',
-                            'value': 'Tim Brunt'}]},
-     {'user_id': 3, 'ops': [{'op': 'replace', 'path': '/name',
-                            'value': 'Tim Brunt'}]}),
-    ('create', create_user,
-     {'name': 'Tim Brunt', 'email': 'tim.brunt@foo.bar',
-      'github': {'id': 5555}},
-     {'id': 4, 'name': 'Tim Brunt', 'email': 'tim.brunt@foo.bar',
-      'github': {'id': 5555}}),
-])
-async def test_user_notification(
-        model, helpers, amqpchannel, name, func, data, expected):
-    helpers['notify'] = helpers['notifications-sender'][name]
-    recv_queue = asyncio.Queue()
-
-    result = await amqpchannel.queue_declare(exclusive=True, durable=False)
-    await amqpchannel.queue_bind(result['queue'], 'amq.topic',
-                                 'notifications.user.{}'.format(name))
-
-    async def recv(channel, body, envelope, properties):
-        await recv_queue.put(body)
-
-    await amqpchannel.basic_consume(recv, queue_name=result['queue'],
-                                    no_ack=True)
-
-    # Call the function
-    await func(helpers, **data)
-
-    # Wait for the notification
-    item = await asyncio.wait_for(recv_queue.get(), timeout=1)
-
-    # Check that the notification matches what is expected
-    assert json.loads(item.decode('utf-8')) == expected
-"""
+def test_patch_user_invalid_media_type(model, client):
+    result = client.patch_json("/1", [], expect_errors=True)
+    assert result.status_code == 415
