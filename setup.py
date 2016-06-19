@@ -12,7 +12,7 @@ def read(relpath):
         return f.read()
 
 setup(
-    name='phi.common.ident',
+    name='glotpod.ident',
 
     description='Identity micro-service for GlotPod',
     long_description="""
@@ -38,24 +38,20 @@ License
 
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.5',
-
     ],
 
     setup_requires=['setuptools_scm'],
-    use_scm_version={"write_to": "src/phi/common/ident/__version__.py"},
+    use_scm_version={"write_to": "src/glotpod/ident/__version__.py"},
 
     package_dir={'': 'src'},
-    package_data={'phi.common.ident': ['defaults.toml']},
-    namespace_packages=['phi', 'phi.common'],
-    packages=["phi.common." + pkg for pkg in find_packages('src/phi/common')],
+    namespace_packages=['glotpod'],
+    packages=["glotpod.ident"],
     install_requires=['cryptography~=1.3.0', 'SQLAlchemy~=1.0.12',
                       'aiopg~=0.9.2', 'toml~=0.9.1', 'aiohttp~=0.21.6',
                       'voluptuous~=0.8.10', 'jsonpatch~=1.13',
                       'mimetype-match~=1.0.4'],
 
-    extras_require={
-    },
+    extras_require={},
 
-    entry_points={
-    },
+    entry_points={},
 )

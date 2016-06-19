@@ -1,6 +1,6 @@
 import pytest
 
-from phi.common.ident import notifications
+from glotpod.ident import notifications
 
 
 @pytest.fixture
@@ -22,7 +22,7 @@ def test_patch_user_notification(model, client, notifications):
     client.patch_json("/1", ops, headers=headers)
 
     assert notifications == [{
-        'user_id': 1, 'type': 'urn:phi:user:patch',
+        'user_id': 1, 'type': 'urn:glotpod:user:patch',
         'scope': 'user+n', 'payload': ops
     }]
 
@@ -34,6 +34,6 @@ def test_create_user_notification(client, notifications):
     data['id'] = result.json['id']
 
     assert notifications == [{
-        'user_id': result.json['id'], 'type': 'urn:phi:user:new',
+        'user_id': result.json['id'], 'type': 'urn:glotpod:user:new',
         'scope': 'user+n', payload: data
     }]

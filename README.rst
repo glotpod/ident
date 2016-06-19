@@ -14,14 +14,14 @@ Installation
 
 Run pip install to install directly from ssh::
 
-  $ git+ssh://alpha.geniphi.com/var/apps/common/ident.git
+  $ git+ssh://alpha.geniglotpod.com/var/apps/common/ident.git
 
 Usage
 -----
 
 To start an instance of the Identity micro-service::
 
-  $ python -m aiohttp.web -H localhost -P 5000 phi.common.ident:init_app
+  $ python -m aiohttp.web -H localhost -P 5000 glotpod.ident:init_app
 
 More than one instance can be run. In that case, the requests pertaining to
 user identity will be partitioned across the instances.
@@ -42,9 +42,9 @@ Key                                  Default            Description
                                                         This needs to be base32 encoded.
 ``database.postgres.host``           ``localhost``      Which host is Postgres listening on?
 ``database.postgres.port``           ``5432``           Which port is Postgres listening on?
-``database.postgres.database``       ``phi.ident``      A (pre-created) database in Postgres which glotpod-ident will
+``database.postgres.database``       ``glotpod.ident``      A (pre-created) database in Postgres which glotpod-ident will
                                                         use for its tables.
-``database.postgres.user``           ``phi.ident``      A Postgres user which has read/write access to the database
+``database.postgres.user``           ``glotpod.ident``      A Postgres user which has read/write access to the database
 ``database.postgres.password``       ---                The password which authenticates the postgres user.
 ==================================   ================== ==============================================================
 

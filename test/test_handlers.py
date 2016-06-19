@@ -237,12 +237,12 @@ def test_search_page_links(model, client):
         {'id': 1, 'name': "Ned Stark", 'email': "hand@headless.north",
          'services': {'github': {'id': '1000'}}}
     ),
-    ('application/vnd.phi.resource-url+json', '/1'),
+    ('application/vnd.glotpod.resource-url+json', '/1'),
 
     ('text/plain', None),
     ('text/json', None),
     ('text/html', None),
-    ('application/vnd.phi.links+json', None)
+    ('application/vnd.glotpod.links+json', None)
 ])
 def test_search_page_media_types(model, client, mediatype, expected):
     headers = {"Accept": mediatype} if mediatype else {}

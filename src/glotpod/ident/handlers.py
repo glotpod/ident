@@ -14,8 +14,8 @@ from sqlalchemy.sql import select, desc, func
 from voluptuous import All, Any, Coerce, Schema, Range, Required, Remove, \
     Length, MultipleInvalid
 
-from phi.common.ident import errors
-from phi.common.ident.model import users, services
+from glotpod.ident import errors
+from glotpod.ident.model import users, services
 
 
 __all__ = ['AllUsers', 'User']
@@ -79,7 +79,7 @@ class AllUsers(web.View):
 
     async def get(self):
         mimetype = self.get_best_mimetype(self.request, [
-            'application/json', 'application/vnd.phi.resource-url+json'
+            'application/json', 'application/vnd.glotpod.resource-url+json'
         ])
         query = self.build_query(self.params, mimetype=='application/json')
         results = []
@@ -174,7 +174,7 @@ class AllUsers(web.View):
 
             # Send a notification about the creation of this user
             self.request.app['subscribers'].notify(
-                user_id, 'urn:phi:user:new', 'user+n', data
+                user_id, 'urn:glotpod:user:new', 'user+n', data
             )
 
             return web.json_response({'id': user_id}, status=201,
@@ -273,7 +273,7 @@ class User(web.View):
 
                     # Send a notification about this user being patched
                     self.request.app['subscribers'].notify(
-                        self.id, 'urn:phi:user:patch', 'user+n', ops
+                        self.id, 'urn:glotpod:user:patch', 'user+n', ops
                     )
 
                     return web.json_response(patched)

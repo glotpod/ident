@@ -10,7 +10,7 @@ from aiohttp import web
 from aiopg.sa import create_engine
 from cryptography.fernet import Fernet
 
-from phi.common.ident import handlers, notifications
+from glotpod.ident import handlers, notifications
 
 
 def load_config():
@@ -52,7 +52,7 @@ async def db_pool_middleware_factory(app, handler):
 
     # Create a connection pool on the first request
     if 'db_engine' not in app:
-        default_args = {'database': 'phi.ident', 'user': 'phi.ident'}
+        default_args = {'database': 'glotpod.ident', 'user': 'glotpod.ident'}
         args = app['config'].get('database', {}).get('postgres', default_args)
 
         app['log'].info("Creating pooled database connections.")

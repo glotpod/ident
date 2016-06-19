@@ -7,8 +7,8 @@ import pytest
 from sqlalchemy import create_engine
 
 from cryptography.fernet import Fernet
-from phi.common.ident import load_config, init_app, fernet_middleware_factory
-from phi.common.ident.model import metadata, users, services
+from glotpod.ident import load_config, init_app, fernet_middleware_factory
+from glotpod.ident.model import metadata, users, services
 
 
 class ModelFixture:
@@ -72,7 +72,7 @@ def config():
     dbcfg.setdefault('password', '')
     dbcfg.setdefault('host', 'localhost'),
     dbcfg.setdefault('port', '5432')
-    dbcfg.setdefault('database', 'phi.common.ident')
+    dbcfg.setdefault('database', 'glotpod.ident')
 
     for var in os.environ:
         if var.startswith('PHI_IDENT_TEST_POSTGRES_'):

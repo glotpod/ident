@@ -3,7 +3,7 @@ from urllib.parse import urlunparse
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 from logging.config import fileConfig
-from phi.common.ident import load_config, model
+from glotpod.ident import load_config, model
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

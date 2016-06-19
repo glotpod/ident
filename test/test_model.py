@@ -1,4 +1,4 @@
-from phi.common.ident.model import metadata
+from glotpod.ident.model import metadata
 
 
 def test_model_creatable(dbengine):
