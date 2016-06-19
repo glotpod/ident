@@ -75,8 +75,8 @@ def config():
     dbcfg.setdefault('database', 'glotpod.ident')
 
     for var in os.environ:
-        if var.startswith('PHI_IDENT_TEST_POSTGRES_'):
-            key = var[len('PHI_IDENT_TEST_POSTGRES_'):].lower()
+        if var.startswith('IDENT_TEST_POSTGRES_'):
+            key = var[len('IDENT_TEST_POSTGRES_'):].lower()
             dbcfg[key] = os.environ[var]
 
     return cfg
