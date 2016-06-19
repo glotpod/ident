@@ -3,7 +3,6 @@ import logging
 import toml
 
 from logging.handlers import MemoryHandler
-from functools import partial
 from os import environ
 
 from aiohttp import web
@@ -29,7 +28,9 @@ def load_config():
 def configure_logging(log, level=logging.INFO):
     log.setLevel(level)
 
-    formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    formatter = logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    )
 
     stream_handler = logging.StreamHandler()
     stream_handler.setFormatter(formatter)
@@ -62,7 +63,6 @@ async def db_pool_middleware_factory(app, handler):
             app['log'].info("Disposing pooled database connections.")
             app['db_engine'].close()
             await app['db_engine'].wait_closed()
-
 
         app.on_shutdown.append(cleanup)
 

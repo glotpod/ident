@@ -5,7 +5,7 @@ import aiohttp
 
 
 class Sender:
-    host = "push.phi"
+    host = "push.gp"
 
     def __init__(self, loop):
         self.session = aiohttp.ClientSession(loop=loop)
@@ -23,5 +23,4 @@ class Sender:
         url = "http://{}/users/{}".format(self.host, user_id)
         body = {'type': type, 'scope': scope, 'payload': payload}
         headers = {'Content-Type': 'application/json'}
-        session = await self.session.post(url, json.dumps(body),
-                                          headers=headers)
+        await self.session.post(url, json.dumps(body), headers=headers)

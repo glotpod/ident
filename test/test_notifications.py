@@ -4,7 +4,7 @@ from glotpod.ident import notifications
 
 
 @pytest.fixture
-def notifications(monkeypatch):
+def events(monkeypatch):
     items = []
 
     def notify(_, user_id, type, scope, payload):
@@ -15,25 +15,25 @@ def notifications(monkeypatch):
     return items
 
 
-def test_patch_user_notification(model, client, notifications):
+def test_patch_user_notification(model, client, events):
     ops = [{'op': 'replace', 'path': '/name', 'value': 'Tim'}]
     headers = {'Content-Type': 'application/json-patch+json'}
 
     client.patch_json("/1", ops, headers=headers)
 
-    assert notifications == [{
+    assert events == [{
         'user_id': 1, 'type': 'urn:glotpod:user:patch',
         'scope': 'user+n', 'payload': ops
     }]
 
 
-def test_create_user_notification(client, notifications):
+def test_create_user_notification(client, events):
     data = {'name': "James Spark", 'email': 'foo@example.com'}
     result = client.post_json('/', data)
 
     data['id'] = result.json['id']
 
-    assert notifications == [{
+    assert events == [{
         'user_id': result.json['id'], 'type': 'urn:glotpod:user:new',
-        'scope': 'user+n', payload: data
+        'scope': 'user+n', 'payload': data
     }]

@@ -1,6 +1,3 @@
-import asyncio
-import json
-import logging
 import re
 
 import pytest
@@ -186,7 +183,7 @@ def test_search_page_links(model, client):
         return {
             match[0]: match[1]
             for match in
-            re.findall(r"<(.*?)>;\srel=([a-z]+)", header, re.I)
+            re.findall(r"<(.*?)>;\srel=([a-z]+)", links_header, re.I)
         }
 
     result = client.get('/?page_size=1')
@@ -196,7 +193,7 @@ def test_search_page_links(model, client):
     assert "link" in result.headers
 
     # Destructure the link header
-    links = get_links(results.headers['link'])
+    links = get_links(result.headers['link'])
 
     # There should be at least three pages
     assert 'next' in links
@@ -205,7 +202,7 @@ def test_search_page_links(model, client):
     # Get the second page, and check its links
     result = client.get(links['next'])
     second_set = result.json
-    links = get_links(results.headers['link'])
+    links = get_links(result.headers['link'])
     assert 'next' in links
     assert 'previous' in links
 
@@ -216,7 +213,7 @@ def test_search_page_links(model, client):
 
     # Go to the last page and check its links
     result = client.get(links['next'])
-    links = get_links(results.headers['link'])
+    links = get_links(result.headers['link'])
     assert 'next' not in links
     assert 'previous' not in links
 

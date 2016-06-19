@@ -1,15 +1,10 @@
-import json
-
 import jsonpatch
 
-from collections import deque
-from collections.abc import Mapping
-from functools import reduce
 from urllib.parse import parse_qsl
 
 from aiohttp import web
 from mimetype_match import AcceptHeader
-from psycopg2 import DataError, IntegrityError, errorcodes
+from psycopg2 import IntegrityError, errorcodes
 from sqlalchemy.sql import select, desc, func
 from voluptuous import All, Any, Coerce, Schema, Range, Required, Remove, \
     Length, MultipleInvalid
@@ -81,12 +76,12 @@ class AllUsers(web.View):
         mimetype = self.get_best_mimetype(self.request, [
             'application/json', 'application/vnd.glotpod.resource-url+json'
         ])
-        query = self.build_query(self.params, mimetype=='application/json')
+        query = self.build_query(self.params, mimetype == 'application/json')
         results = []
 
         async with self.request['db_pool'].acquire() as conn:
             async for row in conn.execute(query):
-                item = {col:row[col] for col in row
+                item = {col: row[col] for col in row
                         if col in ('id', 'name', 'email_address')}
 
                 if mimetype == 'application/json':
@@ -123,7 +118,7 @@ class AllUsers(web.View):
             async with self.request['db_pool'].acquire() as conn:
                 # Create a transaction for the insertion queries; this
                 # is an all or nothing deal
-                async with conn.begin() as transaction:
+                async with conn.begin():
                     # Construct the insert query to create the user object
                     query = users.insert().values(
                         name=data['name'],
@@ -212,7 +207,7 @@ class User(web.View):
             raise web.HTTPUnsupportedMediaType(headers=headers)
 
         async with self.request['db_pool'].acquire() as conn:
-            async with conn.begin() as transaction:
+            async with conn.begin():
                 data = await self.get_user_data(conn, lock_rows=True)
 
                 try:
@@ -232,7 +227,8 @@ class User(web.View):
 
                     await conn.execute(query)
 
-                    for key, svc_name in (('facebook', 'fb'), ('github', 'gh')):
+                    for key, svc_name in (('facebook', 'fb'),
+                                          ('github', 'gh')):
                         matched_record = (
                             (services.c.user_id == self.id) &
                             (services.c.sv_name == svc_name)
@@ -306,87 +302,3 @@ class User(web.View):
             return int(self.request.match_info['id'])
         except TypeError:
             raise web.HTTPNotFound
-
-
-async def patch_user(helpers, user_id, ops):
-    conn = helpers['db_conn']
-    encrypt = helpers['db_fernet'].encrypt
-
-    # Get the user info to patch, while locking the relating database rows
-    # for the remainder of the transaction.
-    helpers['lock_rows'] = True
-    user_data = await get_user(helpers, user_id=user_id)
-
-    # Patch the user data
-    try:
-        patched_data = user_schema(jsonpatch.apply_patch(user_data, ops))
-    except (TypeError, ValueError, jsonpatch.InvalidJsonPatch,
-            jsonpatch.JsonPointerException):
-        raise ValueError(ops)
-    except MultipleInvalid:
-        raise HandlerError('invalid_patch_result')
-    except:
-        raise HandlerError('patch_failed')
-    else:
-        # Write the patched data back into the database
-        try:
-            # Starting with the users table
-            qry = users.update().where(users.c.id == user_id).values(
-                name=patched_data['name'],
-                email_address=patched_data['email'],
-                picture_url=patched_data.get('picture_url'))
-            await conn.execute(qry)
-
-            # The updates to the services table
-            for key, svc_name in (('facebook', 'fb'), ('github', 'gh')):
-                matched_record = (
-                    (services.c.user_id == user_id) &
-                    (services.c.sv_name == svc_name)
-                )
-
-                if key not in patched_data and key in user_data:
-                    # if the service was there before, it has to be
-                    # removed
-                    qry = services.delete(matched_record)
-                    await conn.execute(qry)
-
-                elif key in patched_data:
-                    args = {
-                        'sv_id': patched_data[key]['id'],
-                        'access_token': encrypt(
-                            patched_data[key]['access_token'].encode('utf-8')
-                        )
-                    }
-
-                    if key in user_data:
-                        qry = services.update(matched_record).values(
-                            args
-                        )
-
-                    else:
-                        qry = services.insert().values(
-                            sv_name=svc_name,
-                            user_id=user_id,
-                            **args
-                        )
-
-                    await conn.execute(qry)
-
-        except IntegrityError as e:
-            if e.pgcode == errorcodes.UNIQUE_VIOLATION:
-                raise HandlerError('conflict')
-            else:
-                raise
-
-        else:
-            # Send a notification about the patch
-            patched_data['id'] = user_id
-            patch = jsonpatch.JsonPatch.from_diff(user_data, patched_data)
-
-            notify = helpers['notify']
-            json_data = '{{"user_id": {}, "ops": {} }}'.format(
-                user_id, patch
-            )
-            await notify(json_data.encode('utf-8'))
-
-            return ops

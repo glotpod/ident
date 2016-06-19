@@ -1,13 +1,11 @@
-import asyncio
 import os
-import uuid
 
 import pytest
 
 from sqlalchemy import create_engine
 
 from cryptography.fernet import Fernet
-from glotpod.ident import load_config, init_app, fernet_middleware_factory
+from glotpod.ident import load_config, init_app
 from glotpod.ident.model import metadata, users, services
 
 
