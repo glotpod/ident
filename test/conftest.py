@@ -76,8 +76,11 @@ def config():
 
     for var in os.environ:
         if var.startswith('IDENT_TEST_POSTGRES_'):
+            print(var)
             key = var[len('IDENT_TEST_POSTGRES_'):].lower()
             dbcfg[key] = os.environ[var]
+
+    print(cfg, dbcfg)
 
     return cfg
 

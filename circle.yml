@@ -1,6 +1,6 @@
 machine:
   environment:
-    IDENT_TEST_POSTGRES_USER: 'ubuntu'
-    IDENT_TEST_POSTGRES_DATABASE: 'circle_test'
+    IDENT_TEST_POSTGRES_USER: ubuntu
+    IDENT_TEST_POSTGRES_DATABASE: circle_test
   python:
     version: 3.5.1
