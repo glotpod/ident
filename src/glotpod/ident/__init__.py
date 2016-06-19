@@ -73,27 +73,6 @@ async def db_pool_middleware_factory(app, handler):
     return middleware_handler
 
 
-async def fernet_middleware_factory(app, handler):
-    # This middleware adds a 'fernet' object to every request, which may
-    # be used to encrypt and verify data.
-
-    # Create the fernet on the first request
-    if 'fernet' not in app:
-        key = app['config'].get('database', {}).get('encryption_key')
-        if key is None:
-            raise ValueError(
-                "Configuration value {!r} must be set to a base32 encoded "
-                "fernet key".format("database.encryption_key")
-            )
-        app['fernet'] = Fernet(key)
-
-    async def middleware_handler(request):
-        request['fernet'] = app['fernet']
-        return await handler(request)
-
-    return middleware_handler
-
-
 async def logging_middleware_factory(app, handler):
     # This middleware emits messages to the application log, *and* it
     # sets up logging.
