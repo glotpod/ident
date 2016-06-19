@@ -129,7 +129,7 @@ async def subscribers_middleware_factory(app, handler):
 
 def init_app(_, *, loop=None):
     """Initialise the application object, to be served by aiohttp."""
-    middlewares = [db_pool_middleware_factory, fernet_middleware_factory,
+    middlewares = [db_pool_middleware_factory,
                    subscribers_middleware_factory, logging_middleware_factory]
 
     app = web.Application(loop=loop, middlewares=middlewares)
