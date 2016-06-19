@@ -17,8 +17,8 @@ def load_config():
         'database': {}
     }
 
-    if 'PHI_IDENT_SETTINGS' in environ:
-        with open(environ['PHI_IDENT_SETTINGS']) as fh:
+    if 'IDENT_SETTINGS' in environ:
+        with open(environ['IDENT_SETTINGS']) as fh:
             text = fh.read()
             defaults.update(toml.loads(text))
 
