@@ -10,11 +10,6 @@ from webtest_aiohttp import TestApp as WebtestApp
 
 
 @pytest.fixture
-def client(app):
-    return WebtestApp(app)
-
-
-@pytest.fixture
 def model(model):
     id = model.add_user(name="Ned Stark", email_address="hand@headless.north")
     model.add_github_info(sv_id=1000, user_id=id)
@@ -171,6 +166,7 @@ def test_search_users(model, client, params, matched_ids):
     assert [item['id'] for item in result.json] == matched_ids
 
 
+@pytest.mark.skip(reason="not implemented")
 @given(integers(min_value=1))
 def test_search_item_limit(model, client, page_size):
     result = client.get('/?page_size={}'.format(page_size))
@@ -178,6 +174,7 @@ def test_search_item_limit(model, client, page_size):
     assert len(result.json) <= page_size
 
 
+@pytest.mark.skip(reason="not implemented")
 def test_search_page_links(model, client):
     def get_links(links_header):
         return {
