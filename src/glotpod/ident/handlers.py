@@ -276,9 +276,8 @@ class User(web.View):
 
     async def get_user_data(self, conn, *, id=None, lock_rows=False):
         data = {}
-        query = select([users, services], for_update=lock_rows)
+        query = select([users], for_update=lock_rows)
         query = query.where(users.c.id == self.id)
-        query = query.where(users.c.id == services.c.user_id)
 
         async for row in conn.execute(query):
             data['id'] = row['id']
@@ -286,9 +285,12 @@ class User(web.View):
             data['email'] = row['email_address']
             data.setdefault('services', {})
 
-            if row['sv_id'] is not None:
-                service_data = {'id': row['sv_id']}
-                key = 'facebook' if row['sv_name'] == 'fb' else 'github'
+            svc_query = select([services], for_update=lock_rows)
+            svc_query = svc_query.where(services.c.user_id == self.id)
+
+            async for svc_row in conn.execute(svc_query):
+                service_data = {'id': svc_row['sv_id']}
+                key = 'facebook' if svc_row['sv_name'] == 'fb' else 'github'
                 data['services'][key] = service_data
 
         if not data:

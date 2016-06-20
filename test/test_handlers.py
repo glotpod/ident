@@ -341,3 +341,9 @@ def test_patch_user_errors(model, client, ops, id, code):
 def test_patch_user_invalid_media_type(model, client):
     result = client.patch_json("/1", [], expect_errors=True)
     assert result.status_code == 415
+
+
+def test_get_user_no_service(model, client):
+    id = model.add_user(name="Jimmy Olsen", email_address="jo@daily.com")
+    result = client.get("/{}".format(id))
+    assert result.status_code != 404
