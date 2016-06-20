@@ -7,7 +7,6 @@ from os import environ
 
 from aiohttp import web
 from aiopg.sa import create_engine
-from cryptography.fernet import Fernet
 
 from glotpod.ident import handlers, notifications
 
