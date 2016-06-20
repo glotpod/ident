@@ -1,244 +1,306 @@
-import json
-
 import jsonpatch
 
-from collections.abc import Mapping
-from functools import reduce
+from urllib.parse import parse_qsl
 
-from psycopg2 import DataError, IntegrityError, errorcodes
-from sqlalchemy.sql import select
-from voluptuous import Any, Schema, Required, Remove, MultipleInvalid
+from aiohttp import web
+from mimetype_match import AcceptHeader
+from psycopg2 import IntegrityError, errorcodes
+from sqlalchemy.sql import select, desc, func
+from voluptuous import All, Any, Coerce, Schema, Range, Required, Remove, \
+    Length, MultipleInvalid
 
+from glotpod.ident import errors
 from glotpod.ident.model import users, services
 
-__all__ = ['create_user', 'get_user', 'patch_user', 'HandlerError']
+
+__all__ = ['AllUsers', 'User']
+
+service_name_map = {'fb': 'facebook', 'gh': 'github'}
 
 
-user_schema = Schema({
-    Remove('id'): int,
-    Required('name'): str,
-    Required('email'): str,
-    'picture_url': str,
-    Required(Any('github', 'facebook')): {
-        Required('id'): int,
-        Required('access_token'): str,
-    },
-})
+class AllUsers(web.View):
+    params_schema = Schema({
+        'name': str,
+        'email': str,
+        'page_size': All(Coerce(int), Range(min=1)),
+        'after_id': All(Coerce(int), Range(min=1)),
+        'before_id': All(Coerce(int), Range(min=1)),
+        'first': str
+    })
 
+    @staticmethod
+    def build_query(params, full=False):
+        columns = [users.c.id, users.c.name, users.c.email_address] if full \
+                  else [users.c.id]
 
-async def get_user(helpers, *, user_id=None, email=None,
-                   github_id=None, facebook_id=None):
-    conn = helpers['db_conn']
-    decrypt = helpers['db_fernet'].decrypt
+        query = select(columns)
 
-    searches = []
+        query = query.order_by(users.c.id)
 
-    if user_id is not None:
-        searches.append(users.c.id == user_id)
+        if 'email' in params:
+            query = query.where(users.c.email_address == params['email'])
 
-    if github_id is not None:
-        searches.append(
-            (services.c.sv_id == github_id) &
-            (services.c.sv_name == 'gh')
-        )
+        if 'name' in params:
+            search_string = " & ".join(
+                "{}:*".format(word) for word in params['name'].split(' ')
+            )
+            name_vector = func.to_tsvector(users.c.name)
 
-    if facebook_id is not None:
-        searches.append(
-            (services.c.sv_id == facebook_id) &
-            (services.c.sv_name == 'fb')
-        )
-
-    if email is not None:
-        searches.append(users.c.email_address == email)
-
-    qry = select(
-        [users, services],
-        for_update=helpers.get('lock_rows', False)  # patch_user may ask it
-    ).where(
-        reduce(lambda a, b: a & b, searches)
-    ).where(users.c.id == services.c.user_id)
-
-    user_data = {}
-
-    try:
-        async for row in conn.execute(qry):
-            user_data['id'] = row['id']
-            user_data['name'] = row['name']
-            user_data['email'] = row['email_address']
-
-            if row['picture_url'] is not None:
-                user_data['picture_url'] = row['picture_url']
-
-            if row['sv_id'] is not None:
-                data = {
-                    'id': row['sv_id'],
-                    'access_token': decrypt(
-                        row['access_token'].tobytes()
-                    ).decode('utf-8')
-                }
-                key = 'facebook' if row['sv_name'] == 'fb' else 'github'
-                user_data[key] = data
-
-    except DataError:
-        pass
-
-    if not user_data:
-        raise HandlerError('not_found')
-    else:
-        return user_data
-
-
-async def create_user(helpers, **data):
-    try:
-        data = user_schema(data)
-    except MultipleInvalid:
-        raise ValueError(data)
-
-    conn = helpers['db_conn']
-
-    try:
-        qry = users.insert().values(name=data['name'],
-                                    email_address=data['email'],
-                                    picture_url=data.get('picture_url'))
-        user_id = await conn.scalar(qry.returning(users.c.id))
-
-        if 'github' in data:
-            await conn.execute(
-                _build_service_insert_query(helpers,
-                                            user_id,
-                                            'gh',
-                                            data['github'])
+            query = query.where(name_vector.match(search_string))
+            query = query.order_by(
+                desc(func.ts_rank(name_vector, func.to_tsquery(search_string)))
             )
 
-        if 'facebook' in data:
-            await conn.execute(
-                _build_service_insert_query(helpers,
-                                            user_id,
-                                            'fb',
-                                            data['facebook'])
-            )
+        # if 'page_size' in params:
+        #     query = query.limit(params['page_size'])
+        return query
 
-    except IntegrityError as e:
-        if e.pgcode == errorcodes.UNIQUE_VIOLATION:
-            raise HandlerError('conflict')
+    @staticmethod
+    def get_best_mimetype(request, mimetypes):
+        # Get the best matching mimetype from the given set, or raise an http
+        # error if a good match can't be provided
+        if 'accept' in request.headers:
+            accept = AcceptHeader(request.headers.get('accept', '*/*'))
+            match = accept.get_best_match(mimetypes)
+
+            if match is None:
+                raise web.HTTPNotAcceptable
+
+            else:
+                return match[1]
+
         else:
-            raise
+            return mimetypes[0]
 
-    else:
-        data['id'] = user_id
+    async def get(self):
+        mimetype = self.get_best_mimetype(self.request, [
+            'application/json', 'application/vnd.glotpod.resource-url+json'
+        ])
+        query = self.build_query(self.params, mimetype == 'application/json')
+        results = []
 
-        # Send a notification about the creation of this user
-        await helpers['notify'](json.dumps(data).encode('utf-8'))
+        async with self.request['db_pool'].acquire() as conn:
+            async for row in conn.execute(query):
+                item = {col: row[col] for col in row
+                        if col in ('id', 'name', 'email_address')}
 
-        return {'user_id': user_id}
+                if mimetype == 'application/json':
+                    item['email'] = item.pop('email_address')
+                    item['services'] = {}
 
+                    qry = services.select().where(
+                        services.c.user_id == row['id'])
 
-def _build_service_insert_query(helpers, user_id, sv_name, args):
-    encrypt = helpers['db_fernet'].encrypt
+                    async for service_row in conn.execute(qry):
+                        name = service_name_map[service_row['sv_name']]
+                        item['services'][name] = {'id': service_row['sv_id']}
 
-    return services.insert().values(
-        user_id=user_id, sv_id=args['id'], sv_name=sv_name,
-        access_token=encrypt(args['access_token'].encode('utf-8'))
-    )
+                else:
+                    item = "/{}".format(row['id'])
 
+                results.append(item)
 
-async def patch_user(helpers, user_id, ops):
-    conn = helpers['db_conn']
-    encrypt = helpers['db_fernet'].encrypt
+            return web.json_response(results, content_type=mimetype)
 
-    # Get the user info to patch, while locking the relating database rows
-    # for the remainder of the transaction.
-    helpers['lock_rows'] = True
-    user_data = await get_user(helpers, user_id=user_id)
-
-    # Patch the user data
-    try:
-        patched_data = user_schema(jsonpatch.apply_patch(user_data, ops))
-    except (TypeError, ValueError, jsonpatch.InvalidJsonPatch,
-            jsonpatch.JsonPointerException):
-        raise ValueError(ops)
-    except MultipleInvalid:
-        raise HandlerError('invalid_patch_result')
-    except:
-        raise HandlerError('patch_failed')
-    else:
-        # Write the patched data back into the database
+    async def post(self):
         try:
-            # Starting with the users table
-            qry = users.update().where(users.c.id == user_id).values(
-                name=patched_data['name'],
-                email_address=patched_data['email'],
-                picture_url=patched_data.get('picture_url'))
-            await conn.execute(qry)
+            # Make sure the incoming data is in a valid format
+            # if request.content_type == "application/x-www-form-urlencoded":
+            #     data = user_schema(await request.post())
 
-            # The updates to the services table
-            for key, svc_name in (('facebook', 'fb'), ('github', 'gh')):
-                matched_record = (
-                    (services.c.user_id == user_id) &
-                    (services.c.sv_name == svc_name)
-                )
+            # else:
+            #     data = user_schema(await request.json())
 
-                if key not in patched_data and key in user_data:
-                    # if the service was there before, it has to be
-                    # removed
-                    qry = services.delete(matched_record)
-                    await conn.execute(qry)
+            # fixme: no standard on nested data structures with urlencoded
+            data = User.schema(await self.request.json())
 
-                elif key in patched_data:
-                    args = {
-                        'sv_id': patched_data[key]['id'],
-                        'access_token': encrypt(
-                            patched_data[key]['access_token'].encode('utf-8')
-                        )
-                    }
+            # Get a database connection from the pool
+            async with self.request['db_pool'].acquire() as conn:
+                # Create a transaction for the insertion queries; this
+                # is an all or nothing deal
+                async with conn.begin():
+                    # Construct the insert query to create the user object
+                    query = users.insert().values(
+                        name=data['name'],
+                        email_address=data['email']
+                    )
+                    user_id = await conn.scalar(query.returning(users.c.id))
 
-                    if key in user_data:
-                        qry = services.update(matched_record).values(
-                            args
-                        )
+                    data.setdefault('services', {})
 
-                    else:
-                        qry = services.insert().values(
-                            sv_name=svc_name,
-                            user_id=user_id,
-                            **args
+                    if 'facebook' in data['services']:
+                        await conn.execute(
+                            services.insert().values(
+                                user_id=user_id,
+                                sv_name='fb',
+                                sv_id=data['services']['facebook']['id']
+                            )
                         )
 
-                    await conn.execute(qry)
+                    if 'github' in data['services']:
+                        await conn.execute(
+                            services.insert().values(
+                                user_id=user_id,
+                                sv_name='gh',
+                                sv_id=data['services']['github']['id']
+                            )
+                        )
+
+        except MultipleInvalid:
+            raise web.HTTPBadRequest
 
         except IntegrityError as e:
             if e.pgcode == errorcodes.UNIQUE_VIOLATION:
-                raise HandlerError('conflict')
+                raise web.HTTPConflict
             else:
                 raise
 
         else:
-            # Send a notification about the patch
-            patched_data['id'] = user_id
-            patch = jsonpatch.JsonPatch.from_diff(user_data, patched_data)
+            # Construct the
+            data['id'] = user_id
 
-            notify = helpers['notify']
-            json_data = '{{"user_id": {}, "ops": {} }}'.format(
-                user_id, patch
+            # Construct a URL to the resource
+            user_url = self.request.app.router.named_resources()['user'].url(
+                parts={'id': user_id}
             )
-            await notify(json_data.encode('utf-8'))
 
-            return ops
+            # ... and headers
+            headers = {'Location': user_url}
+
+            # Send a notification about the creation of this user
+            self.request.app['subscribers'].notify(
+                user_id, 'urn:glotpod:user:new', 'user+n', data
+            )
+
+            return web.json_response({'id': user_id}, status=201,
+                                     headers=headers)
+
+    @property
+    def params(self):
+        try:
+            items = dict(parse_qsl(self.request.query_string))
+            return self.params_schema(items)
+        except MultipleInvalid:
+            raise web.HTTPBadRequest
 
 
-class HandlerError(Exception, Mapping):
-    def __init__(self, error, **fields):
-        self._data = dict(error=error, **fields)
-        super().__init__(error)
+class User(web.View):
+    schema = Schema({
+        Remove('id'): int,
+        Required('name'): All(str, str.strip, Length(min=1)),
+        Required('email'): All(str, str.strip, Length(min=1)),
+        'services': {
+            Any('github', 'facebook'): {
+                Required('id'): All(str, str.strip, Length(min=1))
+            }
+        },
+    })
 
-    def __iter__(self):
-        yield from self._data
+    async def get(self):
+        async with self.request['db_pool'].acquire() as conn:
+            return web.json_response(await self.get_user_data(conn))
 
-    def __len__(self):
-        return len(self._data)
+    async def patch(self):
+        supported = ("application/json-patch+json", "application/octet-stream")
+        if self.request.content_type not in supported:
+            headers = {"Accept-Patch": "application/json-patch+json"}
+            raise web.HTTPUnsupportedMediaType(headers=headers)
 
-    def __getitem__(self, key):
-        return self._data[key]
+        async with self.request['db_pool'].acquire() as conn:
+            async with conn.begin():
+                data = await self.get_user_data(conn, lock_rows=True)
 
-    def __hash__(self):
-        return hash(frozenset(self._data.items()))
+                try:
+                    ops = await self.request.json()
+                    patched = self.schema(jsonpatch.apply_patch(data, ops))
+                except (TypeError, ValueError, jsonpatch.InvalidJsonPatch,
+                        jsonpatch.JsonPointerException):
+                    raise web.HTTPBadRequest
+                except MultipleInvalid:
+                    raise errors.HTTPUnprocessableEntity
+
+                try:
+                    query = users.update() \
+                        .where(users.c.id == self.id) \
+                        .values(name=patched['name'],
+                                email_address=patched['email'])
+
+                    await conn.execute(query)
+
+                    for key, svc_name in (('facebook', 'fb'),
+                                          ('github', 'gh')):
+                        matched_record = (
+                            (services.c.user_id == self.id) &
+                            (services.c.sv_name == svc_name)
+                        )
+
+                        if (key not in patched['services']
+                                and key in data['services']):
+                            # if the service was there before, it has to be
+                            # removed
+                            qry = services.delete(matched_record)
+                            await conn.execute(qry)
+
+                        elif key in patched['services']:
+                            args = {'sv_id': patched['services'][key]['id']}
+
+                            if key in data['services']:
+                                qry = services.update(matched_record).values(
+                                    args
+                                )
+
+                            else:
+                                qry = services.insert().values(
+                                    sv_name=svc_name,
+                                    user_id=self.id,
+                                    **args
+                                )
+
+                            await conn.execute(qry)
+
+                except IntegrityError as e:
+                    if e.pgcode == errorcodes.UNIQUE_VIOLATION:
+                        raise web.HTTPConflict
+                    else:
+                        raise
+
+                else:
+                    patched['id'] = self.id
+
+                    # Send a notification about this user being patched
+                    self.request.app['subscribers'].notify(
+                        self.id, 'urn:glotpod:user:patch', 'user+n', ops
+                    )
+
+                    return web.json_response(patched)
+
+    async def get_user_data(self, conn, *, id=None, lock_rows=False):
+        data = {}
+        query = select([users], for_update=lock_rows)
+        query = query.where(users.c.id == self.id)
+
+        async for row in conn.execute(query):
+            data['id'] = row['id']
+            data['name'] = row['name']
+            data['email'] = row['email_address']
+            data.setdefault('services', {})
+
+            svc_query = select([services], for_update=lock_rows)
+            svc_query = svc_query.where(services.c.user_id == self.id)
+
+            async for svc_row in conn.execute(svc_query):
+                service_data = {'id': svc_row['sv_id']}
+                key = 'facebook' if svc_row['sv_name'] == 'fb' else 'github'
+                data['services'][key] = service_data
+
+        if not data:
+            raise web.HTTPNotFound
+
+        return data
+
+    @property
+    def id(self):
+        try:
+            return int(self.request.match_info['id'])
+        except TypeError:
+            raise web.HTTPNotFound

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from setuptools import setup, find_packages
+from setuptools import setup
 from os import path
 
 
@@ -24,8 +24,6 @@ License
 {LICENSE}
 """.format(README=read("README.rst"), LICENSE=read("LICENSE.rst")),
 
-    url='https://github.com/te-je/glotpod-ident',
-
     author='Te-jé Rodgers',
     author_email='tjd.rodgers@gmail.com',
 
@@ -40,24 +38,20 @@ License
 
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.5',
-
     ],
 
     setup_requires=['setuptools_scm'],
     use_scm_version={"write_to": "src/glotpod/ident/__version__.py"},
 
     package_dir={'': 'src'},
-    package_data={'glotpod.ident': ['defaults.toml']},
     namespace_packages=['glotpod'],
-    packages=["glotpod." + pkg for pkg in find_packages('src/glotpod')],
+    packages=["glotpod.ident"],
     install_requires=['cryptography~=1.3.0', 'SQLAlchemy~=1.0.12',
-                      'aiopg~=0.9.2', 'toml~=0.9.1', 'aioamqp~=0.6.0',
-                      'msgpack-python~=0.4.7', 'voluptuous~=0.8.10',
-                      'jsonpatch~=1.13'],
+                      'aiopg~=0.9.2', 'toml~=0.9.1', 'aiohttp~=0.21.6',
+                      'voluptuous~=0.8.10', 'jsonpatch~=1.13',
+                      'mimetype-match~=1.0.4'],
 
-    extras_require={
-    },
+    extras_require={},
 
-    entry_points={
-    },
+    entry_points={},
 )

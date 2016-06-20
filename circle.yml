@@ -1,0 +1,13 @@
+machine:
+  environment:
+    IDENT_TEST_POSTGRES_USER: ubuntu
+    IDENT_TEST_POSTGRES_DATABASE: circle_test
+  python:
+    version: 3.5.1
+dependencies:
+  override:
+    - pip install pytest hypothesis webtest-aiohttp flake8 -e .
+test:
+  override:
+    - py.test test/
+    - flake8 src/ test/ setup.py
