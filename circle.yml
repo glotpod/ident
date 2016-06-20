@@ -6,7 +6,7 @@ machine:
     version: 3.5.1
 dependencies:
   override:
-    - pip install pytest hypothesis webtest-aiohttp -e .
+    - pip install pytest hypothesis webtest-aiohttp flake8 -e .
 test:
   override:
     - py.test test/
