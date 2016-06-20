@@ -23,8 +23,8 @@ target_metadata = model.metadata
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
-app_cfg = load_config()['database']
-app_cfg.setdefault('user', 'ident')
+app_cfg = load_config()['database']['postgres']
+app_cfg.setdefault('user', 'glotpod.ident')
 netloc = app_cfg.get('host', 'localhost')
 if 'user' in app_cfg:
     if 'password' in app_cfg:
@@ -42,7 +42,7 @@ if 'user' in app_cfg:
 if 'port' in app_cfg:
     netloc += ':' + str(port)
 
-url = 'postgresql://' + netloc + '/' + app_cfg.get('database', 'ident')
+url = 'postgres://' + netloc + '/' + app_cfg.get('database', 'glotpod.ident')
 config.set_main_option("sqlalchemy.url", url)
 
 
