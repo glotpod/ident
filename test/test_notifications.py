@@ -3,19 +3,22 @@ import pytest
 from glotpod.ident import notifications
 
 
+
 @pytest.fixture
-def events(monkeypatch):
+def events(monkeypatch, model):
     items = []
 
     def notify(_, user_id, type, scope, payload):
-        items.append(locals().copy())
+        event = {k: v for k, v in locals().items() if k not in ('items', '_')}
+        items.append(event)
 
-    monkeypatch.setattr(notifications.Sender.notify, notify)
+    monkeypatch.setattr(notifications.Sender, 'notify', notify)
 
     return items
 
 
 def test_patch_user_notification(model, client, events):
+    id = model.add_user(name="James Slater", email_address="js@p.net")
     ops = [{'op': 'replace', 'path': '/name', 'value': 'Tim'}]
     headers = {'Content-Type': 'application/json-patch+json'}
 
@@ -32,6 +35,7 @@ def test_create_user_notification(client, events):
     result = client.post_json('/', data)
 
     data['id'] = result.json['id']
+    data['services'] = {}
 
     assert events == [{
         'user_id': result.json['id'], 'type': 'urn:glotpod:user:new',
