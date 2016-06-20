@@ -3,7 +3,6 @@ import pytest
 from glotpod.ident import notifications
 
 
-
 @pytest.fixture
 def events(monkeypatch, model):
     items = []
@@ -18,7 +17,7 @@ def events(monkeypatch, model):
 
 
 def test_patch_user_notification(model, client, events):
-    id = model.add_user(name="James Slater", email_address="js@p.net")
+    model.add_user(name="James Slater", email_address="js@p.net")
     ops = [{'op': 'replace', 'path': '/name', 'value': 'Tim'}]
     headers = {'Content-Type': 'application/json-patch+json'}
 

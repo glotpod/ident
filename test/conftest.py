@@ -46,7 +46,7 @@ def dbengine(config):
                   '@{host}:{port}/{database}'.format(**cfg)
 
     engine = create_engine(connect_url)
-    metadata.drop_all(engine) # remove traces of any old data
+    metadata.drop_all(engine)  # remove traces of any old data
     return engine
 
 
@@ -92,7 +92,9 @@ def app(config):
     app = init_app([], loop=event_loop)
     app['config'] = config
     app['db_engine'] = event_loop.run_until_complete(
-        aiopg.sa.create_engine(loop=event_loop, minsize=10, **config['database']['postgres'])
+        aiopg.sa.create_engine(
+            loop=event_loop, **config['database']['postgres']
+        )
     )
     yield app
     app['db_engine'].close()
