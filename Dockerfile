@@ -11,4 +11,4 @@ RUN pip install alembic -e /usr/src/glotpod
 
 EXPOSE 80
 
-CMD alembic upgrade head && python -m aiohttp.web -H 0.0.0.0 -P 80 phi.common.ident:init_app
+CMD alembic upgrade head && python -m aiohttp.web -H 0.0.0.0 -P 80 glotpod.ident:init_app
