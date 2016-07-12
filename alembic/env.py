@@ -23,8 +23,8 @@ target_metadata = model.metadata
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
-app_cfg = load_config()['database']['postgres']
-app_cfg.setdefault('user', 'glotpod.ident')
+app_cfg = load_config()['database'].get('postgres', {})
+app_cfg.setdefault('user', 'postgres')
 netloc = app_cfg.get('host', 'localhost')
 if 'user' in app_cfg:
     if 'password' in app_cfg:

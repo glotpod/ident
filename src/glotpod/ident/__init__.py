@@ -52,7 +52,7 @@ async def db_pool_middleware_factory(app, handler):
 
     # Create a connection pool on the first request
     if 'db_engine' not in app:
-        default_args = {'database': 'glotpod.ident', 'user': 'glotpod.ident'}
+        default_args = {'database': 'glotpod.ident', 'user': 'postgres'}
         args = app['config'].get('database', {}).get('postgres', default_args)
 
         app['log'].info("Creating pooled database connections.")
