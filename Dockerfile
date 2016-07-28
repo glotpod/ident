@@ -11,4 +11,4 @@ RUN pip install -e /usr/src/glotpod
 
 EXPOSE 80
 
-CMD ["bin/sh", "-c", "alembic upgrade head && exec gunicorn glotpod.ident:app -b 0.0.0.0:80 --worker-class aiohttp.worker.GunicornWebWorker"]
+CMD ["/bin/sh", "-c", "alembic upgrade head && exec gunicorn glotpod.ident:app -b 0.0.0.0:80 --worker-class aiohttp.worker.GunicornWebWorker"]
