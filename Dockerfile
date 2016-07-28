@@ -5,10 +5,10 @@ RUN mkdir -p /usr/src/glotpod
 WORKDIR /usr/src/glotpod
 
 COPY requirements.txt /usr/src/glotpod/requirements.txt
-RUN pip install -r requirements.txt
+RUN pip install gunicorn alembic -r requirements.txt
 COPY . /usr/src/glotpod
-RUN pip install alembic -e /usr/src/glotpod
+RUN pip install -e /usr/src/glotpod
 
 EXPOSE 80
 
-CMD alembic upgrade head && python -m aiohttp.web -H 0.0.0.0 -P 80 glotpod.ident:init_app
+CMD ["bin/sh", "-c", "alembic upgrade head && exec gunicorn glotpod.ident:app -b 0.0.0.0:80 --worker-class aiohttp.worker.GunicornWebWorker"]
